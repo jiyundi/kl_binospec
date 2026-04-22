@@ -9,4 +9,4 @@ Go to `scripts_beta` > `binospec_main_fitting_nautilus.py`. This is where I star
 If running other Python scripts, it may require extra metadata (e.g., raw imaging or spectrum data), and these files are over 1 GB, which exceeds my GitHub storage limit.
 
 ## Copyright hints
-The folder `klm` was originally from Pranjal's `kl_measurement` [GitHub repo](https://github.com/emhuff/kl_measurement/tree/manga/klm) (ask Eric for access), and some code was modified by me. Other codes are mine. Happy to take questions!
+The folder `klm` was originally from Pranjal's `kl_measurement` [GitHub repo](https://github.com/emhuff/kl_measurement/tree/manga/klm) (ask Eric for access), and some code was modified for my preferences. Other codes are mine. Happy to take questions!
