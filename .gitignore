@@ -1,0 +1,7 @@
+*.pyc
+kl_mmt/scripts_beta/Slit_*/
+kl_mmt/scripts_stable/Slit_*/
+kl_mmt/scripts_beta/about_binospec_mock_analysis/real_like/Slit_*
+kl_mmt/scripts_stable/about_binospec_mock_analysis/real_like/Slit_*
+kl_mmt/scripts_beta/about_binospec_mock_analysis/kl_tutorial/Slit_*_runs/run0.01
+kl_mmt/scripts_stable/about_binospec_mock_analysis/kl_tutorial/Slit_*_runs/run0.01

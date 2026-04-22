@@ -1,0 +1,41 @@
+shared_params:
+  g1:   0.0
+  g2:   0.0
+  # cosi: 0.375
+  # vcirc:    142.0
+  # vscale:     0.2
+  # theta_int:  0.0
+  # r_hl_disk:  1.0
+  r_hl_bulge: 0.0
+  # flux:       0.0
+  flux_bulge: 0.0
+  # dx_disk:  0
+  # dy_disk:  0
+  dx_bulge: 0
+  dy_bulge: 0
+  
+  # image_snr: 40
+  # spec_snr:  60
+  beta: 0
+
+line_params: # Please comment this key if nothing in this level key
+  # v_0: 0
+  # I01_spec1: 12
+  # I01_spec2: 12
+  # I01_spec3: 12
+  dx_vel_spec1: 0
+  dy_vel_spec1: 0
+  dx_vel_spec2: 0
+  dy_vel_spec2: 0
+  dx_vel_spec3: 0
+  dy_vel_spec3: 0
+  dx_spec1: 0
+  dy_spec1: 0
+  dx_spec2: 0
+  dy_spec2: 0
+  dx_spec3: 0
+  dy_spec3: 0
+  bkg_level_spec1: 0
+  bkg_level_spec2: 0
+  bkg_level_spec3: 0
+  

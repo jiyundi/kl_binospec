@@ -1,0 +1,84 @@
+shared_params:
+    g1: # 1
+        latex_name: $g_1$
+        prior:
+            max:  0.15
+            min: -0.15
+    g2: # 2
+        latex_name: $g_2$
+        prior:
+            max:  0.15
+            min: -0.15
+    theta_int: # 3
+        latex_name: $\theta_{\mathrm{int}}$
+        prior:
+            max:  3.14159265358979323846
+            min: -3.14159265358979323846
+    vcirc: # 4
+        latex_name: $v_{\rm circ}$
+        prior:
+            norm:
+                loc:   TFprior.log10_vTF
+                scale: TFprior.sigmaTF
+    cosi: # 5
+        latex_name: $\cos{(i)}$
+        prior:
+            max: 1
+            min: 0
+    r_hl_disk: # 6
+        latex_name: $r_{\mathrm{hl, disk}}$
+        prior: 
+            min: 0.2 
+            max: 3.0
+    flux: # 7
+        latex_name: $\log{(F_{\rm disk})}$
+        prior:
+            max: 6
+            min: 3
+    dx_disk: # 8
+        latex_name: $\Delta x_{\rm disk}$
+        prior: 
+            min: -1
+            max:  1
+    dy_disk: # 9
+        latex_name: $\Delta y_{\rm disk}$
+        prior: 
+            min: -1
+            max:  1
+    vscale: # 10
+        latex_name: $r_{\mathrm{vscale}}$
+        prior:
+            max: 2
+            min: 0.01
+    # dx_bulge: # 11
+    #     latex_name: $\Delta x_{\rm bulge}$
+    #     prior: 
+    #         min: -0.8
+    #         max:  0.8
+    # dy_bulge: # 12
+    #     latex_name: $\Delta y_{\rm bulge}$
+    #     prior: 
+    #         min: -0.8
+    #         max:  0.8
+
+line_params:
+    v_0:
+        latex_name: $v_0$
+        prior:
+            min: -300
+            max:  200
+    I01_spec1: # 17: A 
+        latex_name: $I_0^{\rm Spec 1}$
+        prior:
+            min:    0
+            max: 1000
+    I01_spec2: # 19: C
+        latex_name: $I_0^{\rm Spec 2}$
+        prior:
+            min:    0
+            max: 1000
+    I01_spec3: # 21: B
+        latex_name: $I_0^{\rm Spec 3}$
+        prior:
+            min:    0
+            max: 1000
