@@ -7,7 +7,7 @@ all_runs_dir_des = Path('../../../RSCH3/kl_github/the_converted/.')
 # 如果你想先看看会发生什么，把 DRY_RUN=True
 DRY_RUN = False # True 
 
-for runs_dir in all_runs_dir.glob("runs_20260414"):
+for runs_dir in all_runs_dir.glob("runs_20260421"):
     if not runs_dir.is_dir():
         continue
 

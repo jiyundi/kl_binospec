@@ -163,7 +163,7 @@ class NautilusSampler(KLInference):
                 filepath=output_dir + "chain.hdf5"
             )
             sampler.run(n_like_max=1000, verbose=True)
-            print("\033[42m" + 'WARNING:' + "\033[0m " + 
+            print("\033[42m" + 'INFO:' + "\033[0m " + 
                   'Testing done. OK ✅\n')
     
         else:

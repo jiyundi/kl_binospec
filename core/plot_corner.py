@@ -176,6 +176,8 @@ def plot_corner(full_run_dirs, labels,
     
     # Test mode
     if test:
+        print("\033[42m" + 'INFO:' + "\033[0m " + 
+              'Testing done. OK ✅\n')
         return
     
     # Step 3. Choose your param to plot
@@ -184,7 +186,7 @@ def plot_corner(full_run_dirs, labels,
             list(par_names1).index(params_to_plot[i]) 
             for i in range(len(params_to_plot))
             ]
-        par_names1 = par_names1[par_names_idx1]
+        par_names1 = par_names1[par_names_idx1].tolist()
         samples1   = samples1[:,par_names_idx1]
         
         if len(full_run_dirs) > 1: # not only one post
@@ -196,18 +198,16 @@ def plot_corner(full_run_dirs, labels,
             samples2   = samples2[:,par_names_idx2]
             
     else:
-        par_names_idx1 = list(np.arange(len(par_names1)))
-        if len(full_run_dirs) > 1: # not only one post
-            par_names_idx2 = list(np.arange(len(par_names2)))
+        params_to_plot = par_names1.tolist()
     
     # Step 4. Read emission lines and fitting param to get latex names
     lines1 = []
-    for par in par_names1:
+    for par in par_names1.tolist():
         lv1_key, lv2_key = par.split('-')
         if lv1_key != 'shared_params':
             lines1.append(lv1_key.split('_')[0])
     
-    with open('./config/binospec_fitting_params.yaml', 
+    with open('../config/binospec_fitting_params.yaml', 
               "r", encoding="utf-8") as yamlfile:
         fit_par1 = yaml.safe_load(yamlfile)
     
@@ -228,7 +228,9 @@ def plot_corner(full_run_dirs, labels,
         else:
             for line in list(dict.fromkeys(lines1)):
                 for lv2key, par_dict in subdict.items():
-                    if f'{lv1key}-{lv2key}' in params_to_plot:
+                    
+                    config_par_to_find = f'{lv1key}-{lv2key}'
+                    if config_par_to_find in params_to_plot:
                         latex_names.append(
                             '\mathrm{'+f'{line}'+': }'+par_dict['latex_name'][1:-1]
                             )
@@ -236,8 +238,28 @@ def plot_corner(full_run_dirs, labels,
                         if line == 'O2':
                             latex_names.append(
                                 '\mathrm{'+f'{line}b'+': }'+par_dict['latex_name'][1:-1]
+                                ) # Note: this is "b" here
+                            if lv2key == 'v_0':
+                                latex_to_parname.append(f'{line}_params-v_0_2')
+                            else:
+                                latex_to_parname.append(f'{line}_params-I02_{lv2key.split("_")[1]}')
+                
+                    elif lv1key.split('_')[0] == 'line':
+                        config_par_to_find = f'{line}_params-{lv2key}'
+                        if config_par_to_find in params_to_plot:
+                            latex_names.append(
+                                '\mathrm{'+f'{line}'+': }'+par_dict['latex_name'][1:-1]
                                 )
-                            latex_to_parname.append(f'{lv1key}-{lv2key}')
+                            latex_to_parname.append(f'{line}_params-{lv2key}')
+                            if line == 'O2':
+                                latex_names.append(
+                                    '\mathrm{'+f'{line}b'+': }'+par_dict['latex_name'][1:-1]
+                                    ) # Note: this is "b" here
+                                if lv2key == 'v_0':
+                                    latex_to_parname.append(f'{line}_params-v_0_2')
+                                else:
+                                    latex_to_parname.append(f'{line}_params-I02_{lv2key.split("_")[1]}')
+                    
                     else:
                         if params_NOT_to_plot is not None:
                             if f'{lv1key}-{lv2key}' not in params_NOT_to_plot:
@@ -247,6 +269,7 @@ def plot_corner(full_run_dirs, labels,
                                     latex_names.pop()
                                     latex_to_parname.pop()
     latex_names = np.array(latex_names)
+    
     # Re-order
     if params_to_plot is not None:
         latex_names_idx1 = [
@@ -256,27 +279,27 @@ def plot_corner(full_run_dirs, labels,
         latex_names = latex_names[latex_names_idx1]
     
     # (Optional 1) Special limits of g1/g2 priors
-    g1_idx_in_sample1 = list(par_names1).index('shared_params-g1')
-    g2_idx_in_sample1 = list(par_names1).index('shared_params-g2')
-    good_idx_sample1 = [bool(
-        (samples1[i, g1_idx_in_sample1] > -0.2) and 
-        (samples1[i, g1_idx_in_sample1] <  0.2) and 
-        (samples1[i, g2_idx_in_sample1] > -0.2) and 
-        (samples1[i, g2_idx_in_sample1] <  0.2)
-        for i in range(len(samples1))
-        )]
-    mask1 &= good_idx_sample1
-    if len(full_run_dirs) > 1: # not only one post
-        g1_idx_in_sample2 = list(par_names2).index('shared_params-g1')
-        g2_idx_in_sample2 = list(par_names2).index('shared_params-g2')
-        good_idx_sample2 = [bool(
-            (samples2[i, g1_idx_in_sample2] > -0.2) and 
-            (samples2[i, g1_idx_in_sample2] <  0.2) and 
-            (samples2[i, g2_idx_in_sample2] > -0.2) and 
-            (samples2[i, g2_idx_in_sample2] <  0.2))
-            for i in range(len(samples2)
-            )]
-        mask2 &= good_idx_sample2
+    # g1_idx_in_sample1 = list(par_names1).index('shared_params-g1')
+    # g2_idx_in_sample1 = list(par_names1).index('shared_params-g2')
+    # good_idx_sample1 = [bool(
+    #     (samples1[i, g1_idx_in_sample1] > -0.2) and 
+    #     (samples1[i, g1_idx_in_sample1] <  0.2) and 
+    #     (samples1[i, g2_idx_in_sample1] > -0.2) and 
+    #     (samples1[i, g2_idx_in_sample1] <  0.2)
+    #     for i in range(len(samples1))
+    #     )]
+    # mask1 &= good_idx_sample1
+    # if len(full_run_dirs) > 1: # not only one post
+    #     g1_idx_in_sample2 = list(par_names2).index('shared_params-g1')
+    #     g2_idx_in_sample2 = list(par_names2).index('shared_params-g2')
+    #     good_idx_sample2 = [bool(
+    #         (samples2[i, g1_idx_in_sample2] > -0.2) and 
+    #         (samples2[i, g1_idx_in_sample2] <  0.2) and 
+    #         (samples2[i, g2_idx_in_sample2] > -0.2) and 
+    #         (samples2[i, g2_idx_in_sample2] <  0.2))
+    #         for i in range(len(samples2)
+    #         )]
+    #     mask2 &= good_idx_sample2
     
     # Step 5. Pack in getdist/MCSamples
     mc1 = getdist.MCSamples(
@@ -321,9 +344,9 @@ def plot_corner(full_run_dirs, labels,
             else: 
                 getdist_plotter.triangle_plot(mc1, 
                     filled        = True, 
-                    legend_labels = [label1+'\n< No other posterior >'],
+                    legend_labels = [label1],
                     contour_colors= [nautilus_color],
-                    contour_args  = {'alpha': 0.5},
+                    contour_args  = {'alpha': 0.75},
                     title_limit   = 1, # 1σ
                     title_fmt     = '.2f', 
                     smooth1d = 0, # bypass KDE smoother
@@ -468,8 +491,8 @@ if __name__ == '__main__':
     #     "Hb_params-I01_spec3",
     # ]
     
-    test = False #  True 
-    slit_nums = [116] #  np.arange(116, 142)# 118,32,100,113, 18,64,65,67,70,95,97,102,108,128]# np.arange(1, 143)
+    test = False #   True
+    slit_nums = [113] #  np.arange(116, 142)# 118,32,100,113, 18,64,65,67,70,95,97,102,108,128]# np.arange(1, 143)
     
     # slits_not_done  = [29, 57, 59, 112, 122]#, 48, 112, 116, 122]
     # slits_no_formal_nautilus = [48, 116]
@@ -479,42 +502,45 @@ if __name__ == '__main__':
     # slit_nums = np.delete(slit_nums, slits_not_to_plot_idx)
     
     for slit_num in slit_nums: 
+        run_dir_old, date_of_run_old, post_path_old = None, None, None
         base_dir = '../../../RSCH3/kl_github/'
-        full_run_dir_1 = f'{base_dir}runs_nautilus/Slit_{slit_num:03d}/'
-        full_run_dir_2 = f'{base_dir}runs_nautilus/Slit_{slit_num:03d}/'
-        date_of_run1 = 'runs_20260328/'
-        date_of_run2 = 'runs_20260406/'
-        post_path1 = f'{full_run_dir_1}{date_of_run1}post.txt'
-        post_path2 = f'{full_run_dir_2}{date_of_run2}post.txt'
+        # run_dir_old = f'{base_dir}runs_nautilus/Slit_{slit_num:03d}/'
+        run_dir_new = f'{base_dir}runs_nautilus/Slit_{slit_num:03d}/'
+        run_dir_new = f'{base_dir}the_converted/Slit_{slit_num:03d}/'
+        # date_of_run_old = 'runs_20260328/'
+        date_of_run_new = 'runs_20260421/'
+        # post_path_old = f'{run_dir_old}{date_of_run_old}post.txt'
+        post_path_new = f'{run_dir_new}{date_of_run_new}post.txt'
+        corner_png_dir = run_dir_new + date_of_run_new
                 
         print('\n============================================================')
-        if Path(full_run_dir_2).exists() is False:
-            print(f'Slit {slit_num} does not exist.')
+        if Path(run_dir_new).exists() is False:
+            print(f'Slit {slit_num} does not exist: {run_dir_new}')
             continue
         print(f'Plotting for Slit {slit_num}...')
         
-        # If found a UltraNest post
-        if Path(post_path1).exists():
-            plot_corner([post_path1, post_path2],  
-                        [f'#{slit_num} Nautilus', f'#{slit_num} Nautilus \n         (g1, g2 fixed to 0)'],  
-                        params_to_plot = params_to_plot,
-                        # params_NOT_to_plot = params_NOT_to_plot,
-                        percentile=0, 
-                        change_to_equal_weights_in_case=True,
-                        corner_name=f'{full_run_dir_2}corner_compare.png',
-                        test=test,
-                        )
+        # If found an old post
+        if (post_path_old is not None): 
+            if Path(post_path_old).exists():
+                plot_corner([post_path_old, post_path_new],  
+                            [f'#{slit_num} Nautilus', f'#{slit_num} Nautilus \n         (g1, g2 fixed to 0)'],  
+                            params_to_plot = params_to_plot,
+                            # params_NOT_to_plot = params_NOT_to_plot,
+                            percentile=0, 
+                            change_to_equal_weights_in_case=True,
+                            corner_name=f'{corner_png_dir}corner_compare.png',
+                            test=test,
+                            )
         
-        # In case there is no good UltraNest posterior
+        # In case there is no a good posterior for old
         else:
-            plot_corner([post_path2],  
-                        [f'#{slit_num} Nautilus (new)'],  
-                        nautilus_color='deepskyblue',
-                        params_to_plot = params_to_plot,
-                        # params_NOT_to_plot = params_NOT_to_plot,
+            plot_corner([post_path_new],  
+                        [f'#{slit_num} (2026-04-21)'],  
+                        nautilus_color='dimgray', # deepskyblue
+                        # params_to_plot = params_to_plot,
                         percentile=0, 
                         change_to_equal_weights_in_case=True,
-                        corner_name=f'{full_run_dir_2}corner.png',
+                        corner_name=f'{corner_png_dir}corner_all.png',
                         test=test,
                         )
 
