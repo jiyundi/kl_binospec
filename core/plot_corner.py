@@ -357,6 +357,7 @@ def plot_corner(full_run_dirs, labels,
                              par_names1=par_names1, par_names2=None, 
                              mc1=mc1, mc2=None)
             plt.savefig(corner_name, bbox_inches='tight')
+            plt.close()
             return run_samples1, None
         
         else: # 2.2. Plot 1st & 2nd post
@@ -374,6 +375,7 @@ def plot_corner(full_run_dirs, labels,
                              par_names1=par_names1, par_names2=par_names2, 
                              mc1=mc1, mc2=mc2)
             plt.savefig(corner_name, bbox_inches='tight')
+            plt.close()
             return run_samples1, run_samples2
     
     # contours will fail
@@ -393,6 +395,7 @@ def plot_corner(full_run_dirs, labels,
                              par_names1=None, par_names2=par_names2, 
                              mc1=None, mc2=mc2)
             plt.savefig(corner_name, bbox_inches='tight')
+            plt.close()
             return None, run_samples2
         
         else: # 4.2 DO NOT plot 1st + 2nd post
@@ -492,7 +495,7 @@ if __name__ == '__main__':
     # ]
     
     test = False #   True
-    slit_nums = [113] #  np.arange(116, 142)# 118,32,100,113, 18,64,65,67,70,95,97,102,108,128]# np.arange(1, 143)
+    slit_nums = np.arange(3, 142)
     
     # slits_not_done  = [29, 57, 59, 112, 122]#, 48, 112, 116, 122]
     # slits_no_formal_nautilus = [48, 116]
@@ -504,12 +507,12 @@ if __name__ == '__main__':
     for slit_num in slit_nums: 
         run_dir_old, date_of_run_old, post_path_old = None, None, None
         base_dir = '../../../RSCH3/kl_github/'
-        # run_dir_old = f'{base_dir}runs_nautilus/Slit_{slit_num:03d}/'
-        run_dir_new = f'{base_dir}runs_nautilus/Slit_{slit_num:03d}/'
-        run_dir_new = f'{base_dir}the_converted/Slit_{slit_num:03d}/'
-        # date_of_run_old = 'runs_20260328/'
+        
+        # run_dir_new = f'{base_dir}runs_nautilus/Slit_{slit_num:03d}/'
+        run_dir_new = f'{base_dir}the_converted_3/Slit_{slit_num:03d}/'
+        
         date_of_run_new = 'runs_20260421/'
-        # post_path_old = f'{run_dir_old}{date_of_run_old}post.txt'
+        
         post_path_new = f'{run_dir_new}{date_of_run_new}post.txt'
         corner_png_dir = run_dir_new + date_of_run_new
                 
@@ -522,26 +525,28 @@ if __name__ == '__main__':
         # If found an old post
         if (post_path_old is not None): 
             if Path(post_path_old).exists():
-                plot_corner([post_path_old, post_path_new],  
-                            [f'#{slit_num} Nautilus', f'#{slit_num} Nautilus \n         (g1, g2 fixed to 0)'],  
-                            params_to_plot = params_to_plot,
-                            # params_NOT_to_plot = params_NOT_to_plot,
-                            percentile=0, 
-                            change_to_equal_weights_in_case=True,
-                            corner_name=f'{corner_png_dir}corner_compare.png',
-                            test=test,
-                            )
+                plot_corner(
+                    [post_path_old, post_path_new],  
+                    [f'#{slit_num} Nautilus', f'#{slit_num} Nautilus \n         (g1, g2 fixed to 0)'],  
+                    params_to_plot = params_to_plot,
+                    # params_NOT_to_plot = params_NOT_to_plot,
+                    percentile=0, 
+                    change_to_equal_weights_in_case=True,
+                    corner_name=f'{corner_png_dir}corner_compare.png',
+                    test=test,
+                    )
         
         # In case there is no a good posterior for old
         else:
-            plot_corner([post_path_new],  
-                        [f'#{slit_num} (2026-04-21)'],  
-                        nautilus_color='dimgray', # deepskyblue
-                        # params_to_plot = params_to_plot,
-                        percentile=0, 
-                        change_to_equal_weights_in_case=True,
-                        corner_name=f'{corner_png_dir}corner_all.png',
-                        test=test,
-                        )
+            plot_corner(
+                [post_path_new],  
+                [f'#{slit_num} (2026-04-21)'],  
+                nautilus_color='dimgray', # deepskyblue
+                # params_to_plot = params_to_plot,
+                percentile=0, 
+                change_to_equal_weights_in_case=True,
+                corner_name=f'{corner_png_dir}corner_all.png',
+                test=test,
+                )
 
 
