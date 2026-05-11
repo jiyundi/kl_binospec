@@ -59,11 +59,11 @@ class SlitModel(KinematicModel):
                     use_analytic=False, 
                     line_species=meta_param['line_species'], 
                     line_profile_path=meta_param)
-            else:
+            elif line_profile_path == 'extracted':
                 self.emission_line_model = EmissionLine(
                     use_analytic=False, 
                     line_species=meta_param['line_species'], 
-                    line_profile_path=line_profile_path)
+                    line_profile_path=meta_param['line_sig_amps'])
 
         elif 'rhl' in meta_param.keys():
             self.emission_line_model = EmissionLine(
@@ -76,8 +76,8 @@ class SlitModel(KinematicModel):
             raise ValueError('Either need line profile from obs or rhl to instantiate analytic line profile')
 
         self.profile_sigma1, self.profile_sigma2 = self.emission_line_model.line_profile.get_linewidth_profile(self.ndim)
-        self.profile_one_over_sigma1 = [1/p for p in self.profile_sigma1]
-        self.profile_one_over_sigma2 = [1/p for p in self.profile_sigma2]
+        self.profile_one_over_sigma1 = [1/p for p in self.profile_sigma1] # for left/right sigma of line 1
+        self.profile_one_over_sigma2 = [1/p for p in self.profile_sigma2] # for left/right sigma of line 2
 
         self.profile_A = self.emission_line_model.intensity.get_intensity_profile(self.ndim)
 
@@ -215,10 +215,15 @@ class SlitModel(KinematicModel):
         '''
         c = 299792.45  # Speed of light in km/s
         cube = 0.0
-
+        
+        # For each line in this singlet/doublet line
         for i, this_line in enumerate(self.line_wav):
             vfield = velocity_fields[i]
             line_center = (1 + vfield/c) * (this_line.to(u.nm).value)
+            if i == 0:
+                profile_one_over_sigma = self.profile_one_over_sigma1
+            else:
+                profile_one_over_sigma = self.profile_one_over_sigma2
             
             delta_wavelength = self.lambda_grid[:, np.newaxis, :] - line_center[:, :, np.newaxis]
             
@@ -226,10 +231,11 @@ class SlitModel(KinematicModel):
 
             exponent = np.zeros_like(delta_wavelength)
             idx = delta_wavelength<0
-            exponent[ idx] = delta_wavelength[ idx] * self.profile_one_over_sigma1[i][ idx] * params[f'f{i+1}_1']
-            exponent[~idx] = delta_wavelength[~idx] * self.profile_one_over_sigma2[i][~idx] * params[f'f{i+1}_2']
+            exponent[ idx] = delta_wavelength[ idx] * profile_one_over_sigma[i][ idx] * params[f'f{i+1}_1']
+            exponent[~idx] = delta_wavelength[~idx] * profile_one_over_sigma[i][~idx] * params[f'f{i+1}_2']
 
-            cube += params[f'I0{i+1}'] * (np.exp(-exponent**2 / 2.)) * self.profile_A[i][:, :, np.newaxis]
+            cube += params[f'I0{i+1}'] * (np.exp(-exponent**2 / 2.)) \
+                * self.profile_A[i][:, :, np.newaxis] / np.max(self.profile_A[i])
 
         return cube
 
