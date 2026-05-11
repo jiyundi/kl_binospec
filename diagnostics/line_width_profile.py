@@ -266,14 +266,14 @@ def find_line_sigma(arr, line, verbose=False):
 
 
 if __name__ == '__main__':
-    redo = False
+    redo = True
     pkl_folder='../scripts_beta/binospec_pkl/'
     for slit_num in [95]: # , 97
         # Load
         data_info  = another_load_mock(pkl_folder, 
                                        slit_num=slit_num)
         
-        smootheds, lw_restoreds = [], []
+        smootheds, lw_restoreds, x0_sigma_amp_1s, x0_sigma_amp_2s = [], [], [], []
         for spec_idx in range(len(data_info['spec'])):
         
             # ABOVE: Before line profile
@@ -296,8 +296,10 @@ if __name__ == '__main__':
                 x0_sigma_amp_1, x0_sigma_amp_2 = find_line_sigma(
                     smoothed, line_species
                     )
-                data_info['spec'][spec_idx]['par_meta']['line_sig_amps'] = np.array([x0_sigma_amp_1, x0_sigma_amp_2])
-        
+                # data_info['spec'][spec_idx]['par_meta']['line_sig_amps'] = np.array([x0_sigma_amp_1, x0_sigma_amp_2])
+                x0_sigma_amp_1s.append(x0_sigma_amp_1)
+                x0_sigma_amp_2s.append(x0_sigma_amp_2)
+                
             else:
                 x0_sigma_amp_1, x0_sigma_amp_2 = data_info['spec'][spec_idx]['par_meta']['line_sig_amps']
             
@@ -312,7 +314,9 @@ if __name__ == '__main__':
                 lw_restored[y] = fit_func(lw_restored[y], *params)
                 
             lw_restoreds.append(lw_restored)
-                
+            
+        del x0_sigma_amp_1, x0_sigma_amp_2
+        
         # _pop_and_save(pkl_folder, slit_num, data_info)
         data_info = another_load_mock(pkl_folder, slit_num)
         
@@ -339,7 +343,7 @@ if __name__ == '__main__':
             linespecies, fitting_params, fid_params, 
             log10_Mstar=data_info['galaxy']['log10_Mstar'], 
             log10_Mstar_err=data_info['galaxy']['log10_Mstar_err'],
-            use_line_profile = 'extracted', #  'meta' 
+            use_line_profile = 'meta', #   'extracted'
             )
         
         from klm.nautilus_sampler import NautilusSampler
@@ -352,14 +356,14 @@ if __name__ == '__main__':
             nautilus_sampler, fitting_params, json_filename
             )
         
-        best_fit_params['O2_params']['I01_spec1'] /= 2
-        best_fit_params['O2_params']['I02_spec1'] /= 2
-        best_fit_params['O2_params']['I01_spec2'] /= 2
-        best_fit_params['O2_params']['I02_spec2'] /= 2
-        best_fit_params['O2_params']['I01_spec3'] /= 2
-        best_fit_params['O2_params']['I02_spec3'] /= 2
+        # best_fit_params['O2_params']['I01_spec1'] /= 2
+        # best_fit_params['O2_params']['I02_spec1'] /= 2
+        # best_fit_params['O2_params']['I01_spec2'] /= 2
+        # best_fit_params['O2_params']['I02_spec2'] /= 2
+        # best_fit_params['O2_params']['I01_spec3'] /= 2
+        # best_fit_params['O2_params']['I02_spec3'] /= 2
         
-        config_dic['galaxy_params']['line_profile_path'] = 'extracted'
+        # config_dic['galaxy_params']['line_profile_path'] = 'extracted'
         nautilus_sampler_new = NautilusSampler(data_info, config_dic)
         spec_fits_new = []
         for spec_idx in range(len(data_info['spec'])):
@@ -417,7 +421,9 @@ if __name__ == '__main__':
             # plt.colorbar(im8, ax=ax[2,1])
             # plt.colorbar(im9, ax=ax[2,2])
             
-            x0_sigma_amp_1, x0_sigma_amp_2 = data_info['spec'][spec_idx]['par_meta']['line_sig_amps']
+            # x0_sigma_amp_1, x0_sigma_amp_2 = data_info['spec'][spec_idx]['par_meta']['line_sig_amps']
+            x0_sigma_amp_1 = x0_sigma_amp_1s[spec_idx]
+            x0_sigma_amp_2 = x0_sigma_amp_2s[spec_idx]
             max_alpha_1 = np.max(x0_sigma_amp_1[:, 2])
             max_alpha_2 = np.max(x0_sigma_amp_2[:, 2])
             max_alpha   = np.max([max_alpha_1, max_alpha_2])
