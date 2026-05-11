@@ -165,11 +165,11 @@ class SlitModel(KinematicModel):
 
         # Since a spectrum cut may not be precise (off-center),
         # JD added fitting param for centerize emission lines.
-        # 光谱在空间方向上整体上下移动，但保持每个谱线的形状（速度场）不变
-        if params['dx_spec']!=0 or params['dy_spec']!=0:
-            spectrum2D = self._fourier_shift_2d(spectrum2D, 
-                                                Dy=params['dy_spec'], 
-                                                Dx=params['dx_spec'])
+        # 
+        # if params['dx_spec']!=0 or params['dy_spec']!=0:
+        #     spectrum2D = self._fourier_shift_2d(spectrum2D, 
+        #                                         Dy=params['dy_spec'], 
+        #                                         Dx=params['dx_spec'])
         
         return spectrum2D + params['bkg_level']
 
