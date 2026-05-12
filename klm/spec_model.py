@@ -43,7 +43,8 @@ class SlitModel(KinematicModel):
     '''
     Class for creating model spectrum
     '''
-    def __init__(self, obj_param=None, meta_param=None, line_profile_path=None, rc_type='arctan'):
+    def __init__(self, obj_param=None, meta_param=None, 
+                 line_profile=None, redo_data=None, rc_type='arctan'):
         self.velocity_model = VelocityModel(rc_type)
         self._init_observable(obj_param, meta_param)
 
@@ -53,17 +54,17 @@ class SlitModel(KinematicModel):
             )
 
         # sigma1 & sigma2 are the line widths of the two half-Gaussians
-        if line_profile_path is not None:
-            if line_profile_path == 'meta':
-                self.emission_line_model = EmissionLine(
-                    use_analytic=False, 
-                    line_species=meta_param['line_species'], 
-                    line_profile_path=meta_param)
-            elif line_profile_path == 'extracted':
-                self.emission_line_model = EmissionLine(
-                    use_analytic=False, 
-                    line_species=meta_param['line_species'], 
-                    line_profile_path=meta_param['line_sig_amps'])
+        if line_profile == 'redo':
+            self.emission_line_model = EmissionLine(
+                use_analytic=False, 
+                line_species=meta_param['line_species'], 
+                line_profile={'data': redo_data})
+        
+        elif line_profile is not None:
+            self.emission_line_model = EmissionLine(
+                use_analytic=False, 
+                line_species=meta_param['line_species'], 
+                line_profile=meta_param['line_sig_amps'])
 
         elif 'rhl' in meta_param.keys():
             self.emission_line_model = EmissionLine(

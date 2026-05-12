@@ -7,6 +7,7 @@ import argparse
 import time
 import numpy as np
 
+from core.make_config_dic import make_config_dic
 from core.post_fitting import plot_obs_fit_res
 from core.fitting_result_utils import complete_flattened_fit_params
 from klm.parameters import Parameters
@@ -35,37 +36,6 @@ def load_mock(pkl_folder='mock/', Ms_folder='./', slit_num=95,
     return data_info
 
 
-def make_config_dic(linespecies, fitting_params, fid_params, 
-                    log10_Mstar=9.30, log10_Mstar_err=0.05, 
-                    use_line_profile=None):
-    config_dic = {
-        'galaxy_params': {
-            'obs_type':     'slit', 
-            'line_species':    linespecies, 
-            'log10_Mstar':     log10_Mstar, 
-            'log10_Mstar_err': log10_Mstar_err, 
-            'line_profile_path': use_line_profile,
-            }, 
-        'likelihood': {
-            'fit_image':  True, 
-            'fit_spec':   True, 
-            'set_non_analytic_prior': None,
-            'fid_params': fid_params
-            }, 
-        'TFprior': {
-            'use_TFprior': True, 
-            'log10_vTF':   None,
-            'sigmaTF':     None, 
-            'a':            None, 
-            'b':            None, 
-            'sigmaTF_intr': None, 
-            'relation':     None
-            }, 
-        'params': fitting_params,
-        'truevalues': None
-        }
-    return config_dic
-
 
 
 
@@ -84,7 +54,7 @@ def make_config_dic(linespecies, fitting_params, fid_params,
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
-    parser.add_argument('--slitID', default=    3, type=int)
+    parser.add_argument('--slitID', default=   95, type=int)
     parser.add_argument('--run',    default=    1, type=int)
     # Warning: ONLY input True if you want following two arguments 
     #          because of bool("non_empty_str") == True.
@@ -98,8 +68,8 @@ if __name__ == '__main__':
     pkl_folder  =  './binospec_pkl/'
     Ms_folder   =  '../../bagpipes-KL/'
     slit_folder = f'./Slit_{slit_name:03d}/'
-    fiduci_yaml =  "./config/binospec_fid_params.yaml"
-    fittin_yaml =  "./config/binospec_fitting_params.yaml"
+    fiduci_yaml =  "../config/binospec_fid_params.yaml"
+    fittin_yaml =  "../config/binospec_fitting_params.yaml"
     save_path   = slit_folder
     
     # if_continue_last_run = False # True 
@@ -127,7 +97,7 @@ if __name__ == '__main__':
         linespecies, fitting_params, fid_params, 
         log10_Mstar=data_info['galaxy']['log10_Mstar'], 
         log10_Mstar_err=data_info['galaxy']['log10_Mstar_err'],
-        use_line_profile = None, #  'meta' 
+        use_line_profile = 'extracted', # None, 'raw' 
         )
     
     nautilus_sampler = NautilusSampler(data_info, config_dic)
@@ -189,19 +159,31 @@ if __name__ == '__main__':
     
     # Plot - corner
     # import corner
+    # from core.fitting_result_utils import complete_fit_params
     # fitting_par = complete_fit_params(fitting_params, linespecies)
     # par_names, label_latex = [], []
     # for key, subdict in fitting_par.items():
     #     par_names.append(key.split('-')[1])
     #     label_latex.append(subdict['latex_name'])
-    # if if_test is False:
-    #     corner.corner(points, weights=np.exp(log_w), 
-    #                   show_titles=True, 
-    #                   title_kwargs={'size': 36},
-    #                   labels=label_latex, 
-    #                   label_kwargs={'size': 36},
-    #                   color='black')
-    #     plt.savefig(f'{save_path}corner.jpg', dpi=100, bbox_inches='tight')
-    #     print('Plotting done.')
-    # else:
-    #     print('Corner plotting skipped because this is a test run.')
+    from core.plot_corner import plot_corner
+    if if_test is False:
+        # corner.corner(points, weights=np.exp(log_w), 
+        #               show_titles=True, 
+        #               title_kwargs={'size': 36},
+        #               labels=label_latex, 
+        #               label_kwargs={'size': 36},
+        #               color='black')
+        post_path_new  = f'{slit_folder}post.txt'
+        plot_corner(
+            [post_path_new],  
+            [f'#{slit_name}'],  
+            nautilus_color='dimgray', # deepskyblue
+            # params_to_plot = params_to_plot,
+            percentile=0, 
+            change_to_equal_weights_in_case=True,
+            corner_name=f'{slit_folder}corner_all.png',
+            test=False,
+            )
+        print('Plotting done.')
+    else:
+        print('Corner plotting skipped because this is a test run.')

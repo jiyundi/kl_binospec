@@ -169,7 +169,7 @@ class NautilusSampler(KLInference):
         else:
             sampler = Sampler(
                 prior, loglike, n_live=400, 
-                # pool=8, # pool = CPU cores 
+                pool=8, # pool = CPU cores 
                 # HPC ONLY: pool -> n_threads and set 
                 # SLURM with --cpus-per-task=n_threads
                 filepath=output_dir + "chain.hdf5"

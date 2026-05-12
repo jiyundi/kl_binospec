@@ -7,13 +7,16 @@ import numpy as np
 import astropy.units as u
 from   astropy.io  import fits
 from   astropy.wcs import WCS
+from   scipy.ndimage  import median_filter
 
 from   image_utils     import cutoffimg, Meta_image, half_light_radius_exp
-from   line_processing import process_single_line, find_line_sigma
+from   line_processing import process_single_line
 from   meta_utils      import meta_spec_ABC
 from   plot            import make_exam_plots
 from   read_save_utils import save_dic_and_pkl, read_spec2d, readinfodat
 from   spec_utils      import stack_spec2d
+
+from core.line_width_profile import find_line_sigma
 
 # from   klm.safe_plot import setup; setup() # must before plt
 import matplotlib.pyplot as plt
@@ -48,14 +51,23 @@ def main_cut_off(specA, specB, specC, redshift, emilines,
         
         # Optional: Update sigma across wavelen axis 
         # (replace line_profile_path in config)
+        # real_data[0]['meta_spec']['line_sig_amps'] = find_line_sigma(
+        #     real_data[0], how_cut0['Set0'], linename
+        #     )
+        # real_data[1]['meta_spec']['line_sig_amps'] = find_line_sigma(
+        #     real_data[1], how_cut0['Set1'], linename
+        #     )
+        # real_data[2]['meta_spec']['line_sig_amps'] = find_line_sigma(
+        #     real_data[2], how_cut0['Set2'], linename
+        #     )
         real_data[0]['meta_spec']['line_sig_amps'] = find_line_sigma(
-            real_data[0], how_cut0['Set0'], linename
+            median_filter(real_data[0]['spec_data'], size=3), linename
             )
         real_data[1]['meta_spec']['line_sig_amps'] = find_line_sigma(
-            real_data[1], how_cut0['Set1'], linename
+            median_filter(real_data[1]['spec_data'], size=3), linename
             )
         real_data[2]['meta_spec']['line_sig_amps'] = find_line_sigma(
-            real_data[2], how_cut0['Set2'], linename
+            median_filter(real_data[2]['spec_data'], size=3), linename
             )
         
         # Update slit len 
@@ -83,7 +95,7 @@ def main_cut_off(specA, specB, specC, redshift, emilines,
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
-    parser.add_argument('--slitID', default=8, type=int)
+    parser.add_argument('--slitID', default=95, type=int)
     parser.add_argument('--spec_width',  default=30, type=int)
     parser.add_argument('--spec_height', default=20, type=int)
     parser.add_argument('--img_width',   default=20, type=int)
@@ -254,8 +266,9 @@ if __name__ == '__main__':
             import sys; sys.exit(0)
         
         # Make meta_spec, but only one spec from Set C is required
-        meta_spec_A, meta_spec_B, meta_spec_C = meta_spec_ABC(spec2d_Cr, dat_dict, 
-                                                              max_rows)
+        meta_spec_A, meta_spec_B, meta_spec_C = meta_spec_ABC(
+            spec2d_Cr, dat_dict, max_rows
+            )
         
         # For this slit...
         real_data_all_lines_sets, how_cut = main_cut_off(

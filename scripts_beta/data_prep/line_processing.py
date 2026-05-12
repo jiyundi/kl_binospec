@@ -129,6 +129,10 @@ Your decision: ''')=='':
                            tag=f'{linename}, B')
             ]) # [[ix, iy], ...]
         
+        # idx_xys = np.array([
+        #     [18, 33], [18, 33], [18, 33]
+        #     ]) # [[ix, iy], ...]
+        
         emission_ = EmissionProcessor(cutA.copy(),
                                       cutC.copy(), 
                                       cutB.copy(), redshift)
@@ -426,67 +430,67 @@ def resolve_bad_lines(bad_lines,
         
     return real_data_all_lines_sets
 
-def find_line_sigma(spec2dX, howcut, line):
-    mask = spec2dX['spec_mask']
-    arr  = spec2dX['spec_data']
-    ny, nx = arr.shape
-    y0     = int(howcut['line1']['y0'])
-    mean1  = howcut['line1']['x0']
-    mean2  = howcut['line2']['x0']
-    best_std1 = np.ones(ny)
-    best_std2 = np.ones(ny)
-    best_amp1 = np.ones(ny)
-    best_amp2 = np.ones(ny)
+# def find_line_sigma(spec2dX, howcut, line):
+#     mask = spec2dX['spec_mask']
+#     arr  = spec2dX['spec_data']
+#     ny, nx = arr.shape
+#     y0     = int(howcut['line1']['y0'])
+#     mean1  = howcut['line1']['x0']
+#     mean2  = howcut['line2']['x0']
+#     best_std1 = np.ones(ny)
+#     best_std2 = np.ones(ny)
+#     best_amp1 = np.ones(ny)
+#     best_amp2 = np.ones(ny)
     
-    # correct sky line region's flux by assigning a median
-    arr  = np.where(mask, arr, np.median(arr))
+#     # correct sky line region's flux by assigning a median
+#     arr  = np.where(mask, arr, np.median(arr))
     
-    def _gaussian(xx, std, amp):
-        return amp * np.exp(-0.5 * ((xx - mean1) / std) ** 2)
+#     def _gaussian(xx, std, amp):
+#         return amp * np.exp(-0.5 * ((xx - mean1) / std) ** 2)
     
-    def _double_gaussian(xx, std1, amp1, std2, amp2):
-        yy1 = amp1 * np.exp(-0.5 * ((xx - mean1) / std1) ** 2)
-        yy2 = amp2 * np.exp(-0.5 * ((xx - mean2) / std2) ** 2)
-        return yy1 + yy2
+#     def _double_gaussian(xx, std1, amp1, std2, amp2):
+#         yy1 = amp1 * np.exp(-0.5 * ((xx - mean1) / std1) ** 2)
+#         yy2 = amp2 * np.exp(-0.5 * ((xx - mean2) / std2) ** 2)
+#         return yy1 + yy2
     
-    from scipy.optimize import curve_fit
-    fit_func = _double_gaussian if line == "O2" else _gaussian
-    bound1 = ((     1,      0), 
-              (np.inf, np.inf) )
-    bound2 = ((     1,      0,      1,      0), 
-              (np.inf, np.inf, np.inf, np.inf) )
-    bounds = bound2 if line == "O2" else bound1
+#     from scipy.optimize import curve_fit
+#     fit_func = _double_gaussian if line == "O2" else _gaussian
+#     bound1 = ((     1,      0), 
+#               (np.inf, np.inf) )
+#     bound2 = ((     1,      0,      1,      0), 
+#               (np.inf, np.inf, np.inf, np.inf) )
+#     bounds = bound2 if line == "O2" else bound1
     
-    # First fit center line over wavelength px
-    try: 
-        popt, _ = curve_fit(fit_func, 
-                            np.arange(nx), 
-                            arr[y0], 
-                            bounds=bounds, maxfev=100)
-        best_std1[y0] = popt[0]
-        best_amp1[y0] = popt[1]
-        best_std2[y0] = popt[2] if line == "O2" else popt[0]
-        best_amp2[y0] = popt[3] if line == "O2" else 0
-    except RuntimeError:
-        best_std1[y0] = mean1
-        best_amp1[y0] = np.max(arr)
-        best_std2[y0] = mean2       if line == "O2" else mean1
-        best_amp2[y0] = np.max(arr) if line == "O2" else 0
+#     # First fit center line over wavelength px
+#     try: 
+#         popt, _ = curve_fit(fit_func, 
+#                             np.arange(nx), 
+#                             arr[y0], 
+#                             bounds=bounds, maxfev=100)
+#         best_std1[y0] = popt[0]
+#         best_amp1[y0] = popt[1]
+#         best_std2[y0] = popt[2] if line == "O2" else popt[0]
+#         best_amp2[y0] = popt[3] if line == "O2" else 0
+#     except RuntimeError:
+#         best_std1[y0] = mean1
+#         best_amp1[y0] = np.max(arr)
+#         best_std2[y0] = mean2       if line == "O2" else mean1
+#         best_amp2[y0] = np.max(arr) if line == "O2" else 0
     
-    # Try other lines from center to edges
-    for y in np.hstack((np.arange(y0, ny), np.arange(0, y0)[::-1])):
-        try:
-            popt, _ = curve_fit(fit_func, 
-                                np.arange(nx), 
-                                arr[y], 
-                                bounds=bounds, maxfev=100)
-            best_std1[y] = popt[0]
-            best_amp1[y] = popt[1]
-            best_std2[y] = popt[2] if line == "O2" else popt[0]
-            best_amp2[y] = popt[3] if line == "O2" else 0
-        except RuntimeError:
-            pass
+#     # Try other lines from center to edges
+#     for y in np.hstack((np.arange(y0, ny), np.arange(0, y0)[::-1])):
+#         try:
+#             popt, _ = curve_fit(fit_func, 
+#                                 np.arange(nx), 
+#                                 arr[y], 
+#                                 bounds=bounds, maxfev=100)
+#             best_std1[y] = popt[0]
+#             best_amp1[y] = popt[1]
+#             best_std2[y] = popt[2] if line == "O2" else popt[0]
+#             best_amp2[y] = popt[3] if line == "O2" else 0
+#         except RuntimeError:
+#             pass
     
-    return {'std1': best_std1, 'amp1': best_amp1, 
-            'std2': best_std2, 'amp2': best_amp2 }
+#     return {'std1': best_std1, 'amp1': best_amp1, 
+#             'std2': best_std2, 'amp2': best_amp2 }
 

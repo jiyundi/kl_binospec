@@ -114,9 +114,13 @@ class KLInference():
             self.gauss_back_spec.append(this_spec['gauss_back'])
             self.cont_model.append(this_spec['cont_model'])
 
-            S = SlitModel(self.meta_gal, this_spec['par_meta'], 
-                          self.config.galaxy_params.line_profile_path,
-                          self.config.galaxy_params.rc_type)
+            S = SlitModel(
+                obj_param=self.meta_gal, 
+                meta_param=this_spec['par_meta'], 
+                line_profile=self.config.galaxy_params.line_profile_path,
+                redo_data=this_spec['data'],
+                rc_type=self.config.galaxy_params.rc_type
+                )
             self.spec_model.append(S)
                 
             if self.config.verbose:

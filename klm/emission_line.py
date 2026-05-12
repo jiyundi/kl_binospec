@@ -1,13 +1,15 @@
 import joblib
 import numpy as np
-import scipy.signal
-from scipy.optimize import curve_fit, differential_evolution
-import warnings
+# import scipy.signal
+# from scipy.optimize import curve_fit, differential_evolution
+# import warnings
 
 import astropy.units as u
 
 from klm.intensity import IntensityProfile
 from klm.line_profile import LineProfile
+from core.line_width_profile import find_line_sigma
+
 
 class EmissionLine:
     def __init__(self,  use_analytic=False, **kwargs) -> None:
@@ -21,64 +23,80 @@ class EmissionLine:
         self.intensity    = IntensityProfile(Amp)
 
     @staticmethod
-    def _init_profile_from_obs(line_species, line_profile_path):
-        if isinstance(line_profile_path, dict):
-            par_meta = line_profile_path
-            wave_per_pixel = par_meta['lambda_grid'][0,1] - par_meta['lambda_grid'][0,0]
-            amp1 = par_meta['line_sig_amps']['amp1']
-            amp2 = par_meta['line_sig_amps']['amp2']
-            std1 = par_meta['line_sig_amps']['std1'] * wave_per_pixel.value
-            std2 = par_meta['line_sig_amps']['std2'] * wave_per_pixel.value
+    def _init_profile_from_obs(line_species, line_profile):
+        # It's a filename
+        if isinstance(line_profile, str): 
+            f = open(line_profile, 'rb')
+            line_profile = joblib.load(f)[line_species]
+            f.close()
+            Amp, sigma1, sigma2 = line_profile[0], line_profile[2], line_profile[3]
+        
+        # Redo line profile given provided data and linename
+        elif isinstance(line_profile, dict):
+            assert (line_profile.get('data') is not None)
             
-            # Mask out extreme std
-            std1[std1 > 3 * np.median(std1)] = np.median(std1)
-            std2[std2 > 3 * np.median(std2)] = np.median(std2)
-            
-            # Smooth amp and std - Moving average method
-            wa, ws = 3, 2
-            amp1 = np.convolve(amp1, np.ones(wa)/wa, mode='same') 
-            amp2 = np.convolve(amp2, np.ones(wa)/wa, mode='same') 
-            std1 = np.convolve(std1, np.ones(ws)/ws, mode='same')
-            std2 = np.convolve(std2, np.ones(ws)/ws, mode='same')
-            
-            # Smooth amp - Gaussian filter method
-            # sig = 1
-            # from scipy.ndimage import gaussian_filter1d
-            # amp1 = gaussian_filter1d(amp1, sigma=sig)
-            # amp2 = gaussian_filter1d(amp2, sigma=sig)
-            
-            # Normalize std by an r_hl's exponential filter
-            ny = len(par_meta['lambda_grid'])
-            std_fltr = np.abs(np.arange(ny) - ny/2) * par_meta['pixScale'] # arcsec
-            std_fltr = np.exp(-std_fltr / 2)
-            std1 *= std_fltr
-            std2 *= std_fltr
-            
-            # Normalize amp
-            amp1 /= np.max(amp1)
-            amp2 /= np.max(amp2) if np.max(amp2) != 0 else 1
-            Amp = np.array([amp1, amp2]).T
-            
-            # sigma2 = sigma1.
-            # Otherwise see spec_model.py > _add_emission_line and comments in 
-            # line_profile.py (Line 48)
-            sigma1 = np.array([std1, std2]).T * u.Angstrom
-            sigma2 = sigma1
-            
-        elif (isinstance(line_profile_path, list) or 
-              isinstance(line_profile_path, np.ndarray) or 
-              isinstance(line_profile_path, tuple)):
-            x0_sigma_amp_1, x0_sigma_amp_2 = line_profile_path
+            data = line_profile['data']
+            x0_sigma_amp_1, x0_sigma_amp_2 = find_line_sigma(data, line_species)
             
             sigma1 = np.tile(x0_sigma_amp_1[:,1] * u.Angstrom, (2, 1)).T
             sigma2 = np.tile(x0_sigma_amp_2[:,1] * u.Angstrom, (2, 1)).T
             Amp    = np.array([x0_sigma_amp_1[:,2], x0_sigma_amp_2[:,2]]).T
-        
+            
         else:
-            f = open(line_profile_path, 'rb')
-            line_profile = joblib.load(f)[line_species]
-            f.close()
-            Amp, sigma1, sigma2 = line_profile[0], line_profile[2], line_profile[3]
+            assert (
+                isinstance(line_profile, list) or 
+                isinstance(line_profile, tuple) or 
+                isinstance(line_profile, np.ndarray)
+                )
+            
+            x0_sigma_amp_1, x0_sigma_amp_2 = line_profile
+            
+            sigma1 = np.tile(x0_sigma_amp_1[:,1] * u.Angstrom, (2, 1)).T
+            sigma2 = np.tile(x0_sigma_amp_2[:,1] * u.Angstrom, (2, 1)).T
+            Amp    = np.array([x0_sigma_amp_1[:,2], x0_sigma_amp_2[:,2]]).T
+            
+            # Meta spec parameters provided. Regenerate line profile.
+            # if line_profile.get('lambda_grid') is not None:
+            #     par_meta = line_profile
+                
+            #     find_line_sigma()
+                # wave_per_pixel = par_meta['lambda_grid'][0,1] - par_meta['lambda_grid'][0,0]
+                # amp1 = par_meta['line_sig_amps']['amp1']
+                # amp2 = par_meta['line_sig_amps']['amp2']
+                # std1 = par_meta['line_sig_amps']['std1'] * wave_per_pixel.value
+                # std2 = par_meta['line_sig_amps']['std2'] * wave_per_pixel.value
+                
+                # # Mask out extreme std
+                # std1[std1 > 3 * np.median(std1)] = np.median(std1)
+                # std2[std2 > 3 * np.median(std2)] = np.median(std2)
+                
+                # # Smooth amp and std - Moving average method
+                # wa, ws = 3, 2
+                # amp1 = np.convolve(amp1, np.ones(wa)/wa, mode='same') 
+                # amp2 = np.convolve(amp2, np.ones(wa)/wa, mode='same') 
+                # std1 = np.convolve(std1, np.ones(ws)/ws, mode='same')
+                # std2 = np.convolve(std2, np.ones(ws)/ws, mode='same')
+                
+                # # Normalize std by an r_hl's exponential filter
+                # ny = len(par_meta['lambda_grid'])
+                # std_fltr = np.abs(np.arange(ny) - ny/2) * par_meta['pixScale'] # arcsec
+                # std_fltr = np.exp(-std_fltr / 2)
+                # std1 *= std_fltr
+                # std2 *= std_fltr
+                
+                # # Normalize amp
+                # amp1 /= np.max(amp1)
+                # amp2 /= np.max(amp2) if np.max(amp2) != 0 else 1
+                # Amp = np.array([amp1, amp2]).T
+                
+                # # sigma2 = sigma1.
+                # # Otherwise see spec_model.py > _add_emission_line and comments in 
+                # # line_profile.py (Line 48)
+                # sigma1 = np.array([std1, std2]).T * u.Angstrom
+                # sigma2 = sigma1
+            
+            # Line profile arrays already finished. Read it.
+            # else:
             
         return Amp, sigma1, sigma2
 
