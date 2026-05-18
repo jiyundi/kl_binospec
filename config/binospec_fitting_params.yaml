@@ -48,7 +48,7 @@ shared_params:
     vscale: # 10
         latex_name: $r_{\mathrm{vscale}}$
         prior:
-            max: 2
+            max: 4
             min: 0.01
     # dx_bulge: # 11
     #     latex_name: $\Delta x_{\rm bulge}$
@@ -65,8 +65,23 @@ line_params:
     v_0:
         latex_name: $v_0$
         prior:
-            min: -300
-            max:  200
+            min: -180
+            max:  100
+    # f1_0_spec1:
+    #     latex_name: $f_{\sigma(\lambda)}$
+    #     prior:
+    #         min:  0.5
+    #         max:  9.5
+    # f1_0_spec2:
+    #     latex_name: $f_{\sigma(\lambda)}$
+    #     prior:
+    #         min:  0.5
+    #         max:  9.5
+    # f1_0_spec3:
+    #     latex_name: $f_{\sigma(\lambda)}$
+    #     prior:
+    #         min:  0.5
+    #         max:  9.5
     I01_spec1: # 17: A 
         latex_name: $I_0^{\rm Spec 1}$
         prior:

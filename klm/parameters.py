@@ -89,8 +89,9 @@ class Parameters():
                 'dx_spec'  : 0.0,  # deprecated
                 'dy_spec'  : 0.0,  # deprecated
                 'r_hl_spec': 1.0,  # Spec Half_light_radius: arcsec
-                'f1_1': 1,         # Correction factor for dim=1, line i. See 'f{i+1}_1' in spec_model.py
-                'f1_2': 1,         # Correction factor for dim=2, line i.
+                'f1_0': 1,         # Rescale factor of line profile (sigma_x)
+                'f1_1': 1,         # Left wing of line profile, line i. See 'f{i+1}_1' in spec_model.py
+                'f1_2': 1,         # Right wing of line profile, line i.
                 'I01' : 100.0,     # Central Intensity line 1: arbitrary units
                 'bkg_level' : 0.0, # Background level: arbitrary units
                 'sersic_spec':  1, # Sersic-index for spectrum brightness profile
@@ -100,20 +101,23 @@ class Parameters():
                 params[f'{line}_params']['dx_vel_2'] = 0
                 params[f'{line}_params']['dy_vel_2'] = 0
                 params[f'{line}_params']['I02']      = 0
+                params[f'{line}_params']['f2_0']     = 1
                 params[f'{line}_params']['f2_1']     = 1
                 params[f'{line}_params']['f2_2']     = 1
                 
             for i in range(1, num_spectra+1):
                 suffix  = f'_spec{i}'
                 prm_add = {'I01':    None, 'bkg_level': None, 
-                           'dx_vel': None, 'dy_vel':    None}
+                           'dx_vel': None, 'dy_vel':    None,
+                           'f1_0':   None}
                 if line in doublet_lines:
-                    prm_add['I02'] = None
+                    prm_add['I02']  = None
+                    prm_add['f2_0'] = None
                 for key, _ in prm_add.copy().items():
                     if '_spec' not in key:
-                        params[f'{line}_params'][key + suffix] = params[f'{line}_params'][key] + i
+                        params[f'{line}_params'][key + suffix] = params[f'{line}_params'][key] + i/10
                     elif key=='dx_vel' or key=='dy_vel':
-                        params[f'{line}_params'][key + f'{i}'] = params[f'{line}_params'][key] + i
+                        params[f'{line}_params'][key + f'{i}'] = params[f'{line}_params'][key] + i/10
         
         return params
 

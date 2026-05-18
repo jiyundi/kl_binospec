@@ -5,8 +5,8 @@ import numpy as np
 import getdist.plots
 
 import matplotlib.pyplot as plt
-plt.rcParams['figure.dpi']  = 300
-plt.rcParams['savefig.dpi'] = 300
+plt.rcParams['figure.dpi']  = 100
+plt.rcParams['savefig.dpi'] = 100
 
 
 def get_max_num_subdir(root_path):
@@ -242,8 +242,11 @@ def plot_corner(full_run_dirs, labels,
                             if lv2key == 'v_0':
                                 latex_to_parname.append(f'{line}_params-v_0_2')
                             else:
-                                latex_to_parname.append(f'{line}_params-I02_{lv2key.split("_")[1]}')
-                
+                                if lv2key.split("_")[0][:2] == 'I0':
+                                    latex_to_parname.append(f'{line}_params-I02_{lv2key.split("_")[1]}')
+                                elif lv2key.split("_")[0][:2] == 'f1':
+                                    latex_to_parname.append(f'{line}_params-f2_{lv2key.split("_")[1]}_{lv2key.split("_")[2]}')
+                                 
                     elif lv1key.split('_')[0] == 'line':
                         config_par_to_find = f'{line}_params-{lv2key}'
                         if config_par_to_find in params_to_plot:
@@ -258,8 +261,11 @@ def plot_corner(full_run_dirs, labels,
                                 if lv2key == 'v_0':
                                     latex_to_parname.append(f'{line}_params-v_0_2')
                                 else:
-                                    latex_to_parname.append(f'{line}_params-I02_{lv2key.split("_")[1]}')
-                    
+                                    if lv2key.split("_")[0][:2] == 'I0':
+                                        latex_to_parname.append(f'{line}_params-I02_{lv2key.split("_")[1]}')
+                                    elif lv2key.split("_")[0][:2] == 'f1':
+                                        latex_to_parname.append(f'{line}_params-f2_{lv2key.split("_")[1]}_{lv2key.split("_")[2]}')
+                                        
                     else:
                         if params_NOT_to_plot is not None:
                             if f'{lv1key}-{lv2key}' not in params_NOT_to_plot:

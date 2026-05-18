@@ -207,12 +207,14 @@ class KLInference():
             for j_line in range(n_lines):
                 line = lines[j_line]
                 for i in range(n_sets):
+                    
                     # Multi spec may have various I0 due to exposure
-                    key_correct   = ['I01', 'bkg_level']
+                    key_correct   = ['I01', 'bkg_level', 'f1_0']
                     doublet_lines = ['O2']
                     if line in doublet_lines:
                         key_correct.append('I02')
-                    
+                        key_correct.append('f2_0')
+                        
                     suffix = f'_spec{i+1}'
                     for key in key_correct:
                         full_key_name = key + suffix

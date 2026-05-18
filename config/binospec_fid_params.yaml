@@ -20,6 +20,9 @@ shared_params:
 
 line_params: # Please comment this key if nothing in this level key
   # v_0: 0
+  f1_0_spec1: 1
+  f1_0_spec2: 1
+  f1_0_spec3: 1
   # I01_spec1: 12
   # I01_spec2: 12
   # I01_spec3: 12

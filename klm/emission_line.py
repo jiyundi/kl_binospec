@@ -38,9 +38,10 @@ class EmissionLine:
             data = line_profile['data']
             x0_sigma_amp_1, x0_sigma_amp_2 = find_line_sigma(data, line_species)
             
-            sigma1 = np.tile(x0_sigma_amp_1[:,1] * u.Angstrom, (2, 1)).T
-            sigma2 = np.tile(x0_sigma_amp_2[:,1] * u.Angstrom, (2, 1)).T
-            Amp    = np.array([x0_sigma_amp_1[:,2], x0_sigma_amp_2[:,2]]).T
+            sigma1 = np.tile(x0_sigma_amp_1[1:,1].astype(float) * u.Angstrom, (2, 1)).T
+            sigma2 = np.tile(x0_sigma_amp_2[1:,1].astype(float) * u.Angstrom, (2, 1)).T
+            Amp    = np.array([x0_sigma_amp_1[1:,2].astype(float), 
+                               x0_sigma_amp_2[1:,2].astype(float)]).T
             
         else:
             assert (
@@ -51,9 +52,10 @@ class EmissionLine:
             
             x0_sigma_amp_1, x0_sigma_amp_2 = line_profile
             
-            sigma1 = np.tile(x0_sigma_amp_1[:,1] * u.Angstrom, (2, 1)).T
-            sigma2 = np.tile(x0_sigma_amp_2[:,1] * u.Angstrom, (2, 1)).T
-            Amp    = np.array([x0_sigma_amp_1[:,2], x0_sigma_amp_2[:,2]]).T
+            sigma1 = np.tile(x0_sigma_amp_1[1:,1].astype(float) * u.Angstrom, (2, 1)).T
+            sigma2 = np.tile(x0_sigma_amp_2[1:,1].astype(float) * u.Angstrom, (2, 1)).T
+            Amp    = np.array([x0_sigma_amp_1[1:,2].astype(float), 
+                               x0_sigma_amp_2[1:,2].astype(float)]).T
             
             # Meta spec parameters provided. Regenerate line profile.
             # if line_profile.get('lambda_grid') is not None:

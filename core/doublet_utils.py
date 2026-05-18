@@ -23,6 +23,7 @@ DOUBLET_PAR_MAP: dict[str, str] = {
     'dx_vel': 'dx_vel_2',
     'dy_vel': 'dy_vel_2',
     'I01':    'I02',
+    'f1_0':   'f2_0',
     'f1_1':   'f2_1',
     'f1_2':   'f2_2',
 }

@@ -1,4 +1,4 @@
 *.pyc
-scripts_beta/Slit_*/run0.01/*
-scripts_beta/about_binospec_mock_analysis/real_like/Slit_*
-scripts_beta/about_binospec_mock_analysis/kl_tutorial/Slit_*_runs/run0.01
+scripts/Slit_*/run0.01/*
+scripts/about_binospec_mock_analysis/real_like/Slit_*_runs/run0.01/*
+scripts/about_binospec_mock_analysis/kl_tutorial/Slit_*_runs/run0.01/*

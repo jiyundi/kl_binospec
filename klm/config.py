@@ -200,14 +200,13 @@ class Config():
                                                specified_lines=True)
     
     def _complete_line_config(self, line_params, line, specified_lines=False):
-        doub_pars      = ['v_0_2','dx_vel_2','dy_vel_2','I02','f2_1','f2_2']
-        doub_pars_twin = ['v_0',  'dx_vel',  'dy_vel',  'I01','f1_1','f1_2']
+        doub_pars      = ['v_0_2','dx_vel_2','dy_vel_2','I02','f2_0','f2_1','f2_2']
+        doub_pars_twin = ['v_0',  'dx_vel',  'dy_vel',  'I01','f1_0','f1_1','f1_2']
         doublet_lines  = ['O2', 'O2a', 'O2b']
         for p in line_params.keys(): 
             this_prior = line_params[p].get('prior', None)
             latex_name = line_params[p].get('latex_name', p)
 
-        
             # Remove doublet params for singlet lines
             if any([name in p for name in doub_pars]) and \
             (line not in doublet_lines):

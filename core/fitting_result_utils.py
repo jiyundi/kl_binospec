@@ -16,7 +16,7 @@ import yaml
 from klm.parameters import Parameters
 from core.doublet_utils import (
     DOUBLET_LINES,
-    DOUBLET_PAR_MAP,
+    # DOUBLET_PAR_MAP,
     DoubletExpander,
     deduplicate_ordered,
 )

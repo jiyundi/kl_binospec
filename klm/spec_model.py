@@ -77,9 +77,6 @@ class SlitModel(KinematicModel):
             raise ValueError('Either need line profile from obs or rhl to instantiate analytic line profile')
 
         self.profile_sigma1, self.profile_sigma2 = self.emission_line_model.line_profile.get_linewidth_profile(self.ndim)
-        self.profile_one_over_sigma1 = [1/p for p in self.profile_sigma1] # for left/right sigma of line 1
-        self.profile_one_over_sigma2 = [1/p for p in self.profile_sigma2] # for left/right sigma of line 2
-
         self.profile_A = self.emission_line_model.intensity.get_intensity_profile(self.ndim)
 
     def _init_observable(self, obj_param, meta_param):
@@ -131,7 +128,6 @@ class SlitModel(KinematicModel):
 
 
     def get_observable(self, params):
-        # self.gal_image_cutout = self._get_image_cutout(params, slit_angle)
         self.gal_image_cutout = 0.
         spectra = self._build_spectrum(params, self.gal_image_cutout)
 
@@ -163,17 +159,10 @@ class SlitModel(KinematicModel):
         spectrum3D = galaxy_emission * (~self.slit_mask)[:, :, np.newaxis]
         
         spectrum2D = np.sum(spectrum3D, axis=1)
-
-        # Since a spectrum cut may not be precise (off-center),
-        # JD added fitting param for centerize emission lines.
-        # 
-        # if params['dx_spec']!=0 or params['dy_spec']!=0:
-        #     spectrum2D = self._fourier_shift_2d(spectrum2D, 
-        #                                         Dy=params['dy_spec'], 
-        #                                         Dx=params['dx_spec'])
         
         return spectrum2D + params['bkg_level']
-
+    
+    
     def build_line_vfield(self, params, Xgrid, Ygrid):
         ''' Evaluates the velocity field on a 2D grid. Computes two separate rotation curves
         if the emission line is a doublet.
@@ -222,9 +211,13 @@ class SlitModel(KinematicModel):
             vfield = velocity_fields[i]
             line_center = (1 + vfield/c) * (this_line.to(u.nm).value)
             if i == 0:
-                profile_one_over_sigma = self.profile_one_over_sigma1
+                # for left/right sigma of line 1
+                profile_one_over_sigma = [1 / (ss * 1) 
+                                          for ss in self.profile_sigma1]
             else:
-                profile_one_over_sigma = self.profile_one_over_sigma2
+                # for left/right sigma of line 2
+                profile_one_over_sigma = [1 / (ss * 1) 
+                                          for ss in self.profile_sigma2]
             
             delta_wavelength = self.lambda_grid[:, np.newaxis, :] - line_center[:, :, np.newaxis]
             
@@ -232,10 +225,18 @@ class SlitModel(KinematicModel):
 
             exponent = np.zeros_like(delta_wavelength)
             idx = delta_wavelength<0
-            exponent[ idx] = delta_wavelength[ idx] * profile_one_over_sigma[i][ idx] * params[f'f{i+1}_1']
-            exponent[~idx] = delta_wavelength[~idx] * profile_one_over_sigma[i][~idx] * params[f'f{i+1}_2']
-
-            cube += params[f'I0{i+1}'] * (np.exp(-exponent**2 / 2.)) \
+            
+            exponent[ idx] = -0.5 * (
+                delta_wavelength[ idx] * profile_one_over_sigma[i][ idx] * params[f'f{i+1}_1']
+                ) ** 2
+            exponent[~idx] = -0.5 * (
+                delta_wavelength[~idx] * profile_one_over_sigma[i][~idx] * params[f'f{i+1}_2']
+                ) ** 2
+            
+            if params[f'I0{i+1}'] is None:
+                print(params[f'I0{i+1}'])
+                
+            cube += params[f'I0{i+1}'] * np.exp(exponent) \
                 * self.profile_A[i][:, :, np.newaxis] / np.max(self.profile_A[i])
 
         return cube
