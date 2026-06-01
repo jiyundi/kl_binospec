@@ -234,7 +234,7 @@ def plot_obs_fit_res(
         )
 
     nspec      = len(data_info['spec'])
-    pix_scale  = data_info['image']['par_meta']['pixScale']
+    pix_scale  = data_info['image']['meta']['pixScale']
     annotator  = _AnnotationHelper()
 
     # Free-parameter count for DOF calculation
@@ -265,7 +265,7 @@ def plot_obs_fit_res(
     #   coolwarm colour-scale direction after the flip.
     image_obs  = np.flip(inference.data_image, axis=1)
     image_msk  = np.flip(inference.mask_image, axis=1)
-    image_varr = np.flip(inference.varr_image,  axis=1)
+    image_var  = np.flip(inference.var_image,  axis=1)
     image_fit  = np.flip(
         inference.image_model.get_image(best_fit_dict['shared_params']),
         axis=1,
@@ -315,7 +315,7 @@ def plot_obs_fit_res(
     )
 
     # SNR info on obs panel
-    image_snr = np.sum(image_obs[image_msk]) / np.sum(image_varr) ** 0.5
+    image_snr = np.sum(image_obs[image_msk]) / np.sqrt(np.sum(image_obs[image_msk] + image_var[image_msk]))
     ax_img_obs.text(
         0.98, 0.97,
         f'N_RA = {nx_img} px\nN_DEC = {ny_img} px\nSNR = {image_snr:.0f}',
@@ -345,7 +345,7 @@ def plot_obs_fit_res(
 
         inference.spec_model[i]._init_observable(
             data_info['galaxy'],
-            data_info['spec'][i]['par_meta'],
+            data_info['spec'][i]['meta'],
         )
 
         # Collapse per-set intensity keys (I01_specN → I01) for this row
@@ -359,16 +359,15 @@ def plot_obs_fit_res(
         spec_obs  = inference.data_spec[i]
         spec_msk  = inference.mask_spec[i]
         spec_fit  = inference.spec_model[i].get_observable(best_one_level)
-        spec_bck  = inference.gauss_back_spec[i]
         spec_var  = inference.var_spec[i]
-        spec_con  = inference.cont_model[i]
         spec_chi2 = inference._loglike_one_slit(
-            spec_obs, spec_msk, spec_fit, spec_bck, spec_var, spec_con)
+            spec_obs, spec_msk, spec_var, spec_fit
+            )
 
         ny_spec, nx_spec = spec_obs.shape
         spec_dof = np.sum(spec_msk) - len(fitting_par)
 
-        lambda_grid = data_info['spec'][i]['par_meta']['lambda_grid']
+        lambda_grid = data_info['spec'][i]['meta']['lambda_grid']
         spec_extent = [
             lambda_grid[0][0].value,
             lambda_grid[0][-1].value,
@@ -400,7 +399,7 @@ def plot_obs_fit_res(
         # SNR info on obs panel
         spec_snr = (
             np.sum(spec_obs[spec_msk]) /
-            np.sum(spec_bck[spec_msk] ** 2 + spec_var[spec_msk]) ** 0.5
+            np.sqrt(np.sum(spec_obs[spec_msk] + spec_var[spec_msk]))
         )
         ax_spe_obs.text(
             0.98, 0.97,

@@ -24,15 +24,15 @@ def solve_snr(data, var, data_type):
         return np.sum(data) / np.sqrt(np.sum(var))
 
 
-def make_exam_plots(real_data_info, slit_name, how_cut=None, 
+def make_exam_plots(data_info, slit_name, how_cut=None, 
                     pkl_folder='./', savefig=True):
     setnames = ['A', 'C', 'B']
     n_sets   = len(setnames)
-    n_specs  = len(real_data_info['spec'])
+    n_specs  = len(data_info.spec)
     n_lines  = int(n_specs / n_sets)
     
     fig = plt.figure(figsize=(5*n_lines+2, 4*n_sets))  # (length, height)
-    plt.subplots_adjust(hspace=0.35, wspace=0.25) # h=height
+    plt.subplots_adjust(hspace=0.35, wspace=0.35) # h=height
     gs = fig.add_gridspec(nrows=n_sets, ncols=(n_lines+1), 
                           height_ratios=[1]*n_sets, 
                           width_ratios=[1]*n_lines + [1.2])
@@ -44,24 +44,24 @@ def make_exam_plots(real_data_info, slit_name, how_cut=None,
     # Spectra
     for j in range(n_lines): # start with a column first
         for i in range(n_sets):
-            linename   = real_data_info['spec'][j*n_sets+i]['par_meta']['line_species']
-            slitRA     = real_data_info['spec'][j*n_sets+i]['par_meta']['slitRA'].value
-            slitDec    = real_data_info['spec'][j*n_sets+i]['par_meta']['slitDec'].value
-            slitLen    = real_data_info['spec'][j*n_sets+i]['par_meta']['slitLen']
-            slitWidth  = real_data_info['spec'][j*n_sets+i]['par_meta']['slitWidth']
-            slit_LPA   = real_data_info['spec'][j*n_sets+i]['par_meta']['slitLPA'].value
+            linename   = data_info.spec[j*n_sets+i].meta['line_species']
+            slitRA     = data_info.spec[j*n_sets+i].meta['slitRA'].value
+            slitDec    = data_info.spec[j*n_sets+i].meta['slitDec'].value
+            slitLen    = data_info.spec[j*n_sets+i].meta['slitLen']
+            slitWidth  = data_info.spec[j*n_sets+i].meta['slitWidth']
+            slit_LPA   = data_info.spec[j*n_sets+i].meta['slitLPA'].value
             
             ax1 = fig.add_subplot(gs[i, j])
             
-            spec_data = real_data_info['spec'][j*n_sets+i]['data']
-            spec_mask = real_data_info['spec'][j*n_sets+i]['mask']
+            spec_data = data_info.spec[j*n_sets+i].data
+            spec_mask = data_info.spec[j*n_sets+i].mask
             
             noise = np.nanstd(spec_data[spec_mask])
             ny, nx = spec_data.shape
-            xmin =  real_data_info['spec'][j*n_sets+i]['par_meta']['lambda_grid'][0, 0].value # x_left
-            xmax =  real_data_info['spec'][j*n_sets+i]['par_meta']['lambda_grid'][0,-1].value # x_right
-            ymin = -real_data_info['spec'][j*n_sets+i]['par_meta']['pixScale']*len(spec_data)/2 # y_bottom
-            ymax = +real_data_info['spec'][j*n_sets+i]['par_meta']['pixScale']*len(spec_data)/2 # y_top
+            xmin =  data_info.spec[j*n_sets+i].meta['lambda_grid'][0, 0].value # x_left
+            xmax =  data_info.spec[j*n_sets+i].meta['lambda_grid'][0,-1].value # x_right
+            ymin = -data_info.spec[j*n_sets+i].meta['pixScale']*len(spec_data)/2 # y_bottom
+            ymax = +data_info.spec[j*n_sets+i].meta['pixScale']*len(spec_data)/2 # y_top
             im_spec = ax1.imshow(np.where(spec_mask, spec_data, np.nan), 
                                  extent=[xmin, xmax, ymin, ymax],
                                  cmap='viridis', aspect='auto', origin='lower', 
@@ -92,19 +92,15 @@ def make_exam_plots(real_data_info, slit_name, how_cut=None,
                          fontsize=10, color='orangered', ha='right', va='bottom', 
                          transform=ax1.transAxes)
             
-            spec_var1 = real_data_info['spec'][j*n_sets+i]['gauss_back']**2
-            spec_var2 = real_data_info['spec'][j*n_sets+i]['var']
-            specSNR1  = solve_snr(spec_data[spec_mask], spec_var1[spec_mask], "spec")
-            specSNR2  = solve_snr(spec_data[spec_mask], spec_var2[spec_mask], "spec")
-            specSNR3  = solve_snr(spec_data[spec_mask], 
+            spec_var1 = spec_data # as a Poisson noise
+            spec_var2 = data_info.spec[j*n_sets+i].var
+            specSNR   = solve_snr(spec_data[spec_mask], 
                                   spec_var1[spec_mask] + spec_var2[spec_mask], 
                                   "spec")
             ax1.text(0.98, 0.98, 
-                     f'SNR: {specSNR1:.0f} (back^2), {specSNR2:.0f} (var)'+'\n'+
-                     f'SNR: {specSNR3:.0f} (combined)'+'\n'+
-                     f"Back Gauss: {np.mean(real_data_info['spec'][j*n_sets+i]['gauss_back']):.1f}"+'\n'+
                      f'Min: {np.min(spec_data[spec_mask]):.1f}'+'\n'+
-                     f'Max: {np.max(spec_data[spec_mask]):.1f}', 
+                     f'Max: {np.max(spec_data[spec_mask]):.1f}'+'\n'+ 
+                     f'SNR: {specSNR:.0f}',
                      fontsize=10, color='orangered', ha='right', va='top', 
                      transform=ax1.transAxes)
             sets_slitRA.append(slitRA)
@@ -114,21 +110,19 @@ def make_exam_plots(real_data_info, slit_name, how_cut=None,
     
     # Imaging
     for i in range(n_sets):
-        objRA      = real_data_info['image']['par_meta']['RA']
-        objDec     = real_data_info['image']['par_meta']['Dec']
-        ap_wcs     = real_data_info['image']['par_meta']['ap_wcs']
-        pixScale   = real_data_info['image']['par_meta']['pixScale']
+        objRA      = data_info.image.meta['RA']
+        objDec     = data_info.image.meta['Dec']
+        ap_wcs     = data_info.image.meta['ap_wcs']
+        pixScale   = data_info.image.meta['pixScale']
         
         ax2 = fig.add_subplot(gs[i, -1], 
                               projection=ap_wcs)
         
-        image_mask = real_data_info['image']['mask']
-        image_data = real_data_info['image']['data']
-        image_var  = real_data_info['image']['var']
-        image_varr = real_data_info['image']['varr']
-        image_data = np.where(image_data>-1, 
-                              image_data, 0)
-        noise = np.nanstd(image_data)
+        image_mask = data_info.image.mask
+        image_data = data_info.image.data
+        # image_data = np.where(image_data>-1, 
+        #                       image_data, 0)
+        noise = np.nanstd(np.where(image_mask, image_data, np.nan))
         im_imag = ax2.imshow(np.where(image_mask, image_data, np.nan),  
                              cmap='viridis', aspect='equal', 
                              vmin=0-noise, vmax=0 + 5*noise)
@@ -139,11 +133,16 @@ def make_exam_plots(real_data_info, slit_name, how_cut=None,
         ax2.scatter(x0slit, y0slit, marker='o', s=30,  color=colors[i], zorder=2)
         rot_rectangle(ax2, x0slit, y0slit, slitWidth/pixScale, slitLen/pixScale, 
                       (90-slit_LPA)/57.3, colors[i], '-')
+        
+        image_var1 = image_data # as a Poisson noise
+        image_var2 = data_info.image.var
+        imageSNR   = solve_snr(image_data[image_mask], 
+                               image_var1[image_mask] + image_var2[image_mask], 
+                               "image")
         ax2.text(0.98, 0.98, 
                  f'Min = {np.nanmin(image_data[image_mask]):.1f}'+'\n'+
                  f'Max = {np.nanmax(image_data[image_mask]):.1f}'+'\n'+
-                 'SNR = '+f'{solve_snr(image_data[image_mask], image_var, "image"):.2g}'+'\n'+
-                 'Reduced SNR = '+f'{solve_snr(image_data[image_mask], image_varr, "image"):.2g}', 
+                 f'SNR = {imageSNR:.0f}',
                  fontsize=10, color='orangered', ha='right', va='top', 
                  transform=ax2.transAxes)
         ax2.text(0.98, 0.02, 

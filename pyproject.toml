@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kl_mmt"
-version = "0.1.0"
+version = "0.2.0"
 description = "KL fitting toolkit"
 
 [tool.setuptools]
@@ -12,5 +12,5 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["klm*", "core*", "summary*"]
+include = ["klm*", "core*", "summary*", "data_prep*"]
 exclude = ["archived*", "diagnostics*", "visualization*"]

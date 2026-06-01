@@ -8,7 +8,7 @@ import astropy.units as u
 
 from klm.intensity import IntensityProfile
 from klm.line_profile import LineProfile
-from core.line_width_profile import find_line_sigma
+from data_prep.spec.line_width_profile import find_line_sigma
 
 
 class EmissionLine:

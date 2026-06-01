@@ -49,17 +49,16 @@ class KLInference():
                 spec = data_info['spec']
                 self.params._update_params(
                     update_dict,
-                    [spec[i]['par_meta']['line_species'] for i in range(len(spec))]
+                    [spec[i]['meta']['line_species'] for i in range(len(spec))]
                     )
                     
     def _init_data(self, data_info):
         self.meta_gal = data_info['galaxy']
         if self.config.likelihood.isFitImage:
-            self.meta_image = data_info['image']['par_meta']
+            self.meta_image = data_info['image']['meta']
             self.data_image = data_info['image']['data']
             self.mask_image = data_info['image']['mask']
             self.var_image  = data_info['image']['var']
-            self.varr_image = data_info['image']['varr']
             self.image_model = ImageModel(self.meta_image)
 
 
@@ -96,27 +95,23 @@ class KLInference():
         self.meta_spec = []
         self.data_spec = []
         self.mask_spec = []
-        self.var_spec = []
-        self.gauss_back_spec = []
-        self.cont_model = []
+        self.var_spec  = []
         self.spec_model = []
 
         for i in range(len(data_info['spec'])):
             this_spec = data_info['spec'][i]
 
-            if this_spec['par_meta']['line_species'] not in self.config.galaxy_params.line_species:
+            if this_spec['meta']['line_species'] not in self.config.galaxy_params.line_species:
                 continue
 
-            self.meta_spec.append(this_spec['par_meta'])
+            self.meta_spec.append(this_spec['meta'])
             self.data_spec.append(this_spec['data'])
             self.mask_spec.append(this_spec['mask'])
             self.var_spec.append(this_spec['var'])
-            self.gauss_back_spec.append(this_spec['gauss_back'])
-            self.cont_model.append(this_spec['cont_model'])
 
             S = SlitModel(
                 obj_param=self.meta_gal, 
-                meta_param=this_spec['par_meta'], 
+                meta_param=this_spec['meta'], 
                 line_profile=self.config.galaxy_params.line_profile_path,
                 redo_data=this_spec['data'],
                 rc_type=self.config.galaxy_params.rc_type
@@ -229,14 +224,10 @@ class KLInference():
                     model_spec = self.spec_model[spec_i].get_observable(
                             this_line_dict
                             )
-                    gauss_back_spec = self.gauss_back_spec[spec_i]
-                    var_spec        = self.var_spec[spec_i]
-                    cont_spec       = self.cont_model[spec_i]
+                    var_spec   = self.var_spec[spec_i]
                     
                     chi2_one_slit = self._loglike_one_slit(
-                        data_spec, mask_spec, model_spec, 
-                        gauss_back_spec, var_spec, 
-                        cont_spec
+                        data_spec, mask_spec, var_spec, model_spec
                         )
                     
                     chi2 += chi2_one_slit
@@ -248,18 +239,18 @@ class KLInference():
 
     
     
-    def _loglike_one_slit(self, data_spec, mask_spec, model_spec, 
-                          gauss_back_spec, var_spec, 
-                          cont_spec):
-        resi2 = (data_spec[mask_spec] - model_spec[mask_spec])**2
+    def _loglike_one_slit(self, data_spec, mask_spec, var_spec, model_spec):
+        resi2     = (data_spec[mask_spec] - model_spec[mask_spec])**2
+        var_total =  data_spec[mask_spec] + var_spec[mask_spec]
         
-        var_total = (
-            data_spec[mask_spec] + 
-            gauss_back_spec[mask_spec]**2 +
-            # var_spec[mask_spec] + 
-            0)
+        log_like  = np.sum(resi2 / var_total)
         
-        return np.sum(resi2 / var_total)
+        if log_like <= 0:
+            print()
+        
+        assert log_like >= 0, 'Found negative var_total in spec log_like'
+        
+        return log_like
 
 
     def calc_image_loglike(self, pars):
@@ -279,12 +270,14 @@ class KLInference():
         
         # (1) Normal calculation: Do not count negative-flux data's pixels in
         data_image = self.data_image
-        # var_image  = self.var_image
-        varr_image = self.varr_image
+        var_image  = self.var_image
         mask_image = self.mask_image
         
-        log_like   = np.sum(
-            (data_image[mask_image] - model_image[mask_image])**2 / (data_image[mask_image] + varr_image[mask_image])
-            )
+        resi2     = (data_image[mask_image] - model_image[mask_image])**2
+        var_total =  data_image[mask_image] + var_image[mask_image]
+        
+        log_like  = np.sum(resi2 / var_total)
+        
+        assert log_like >= 0, 'Found negative var_total in image log_like'
         
         return log_like

@@ -64,7 +64,7 @@ class SlitModel(KinematicModel):
             self.emission_line_model = EmissionLine(
                 use_analytic=False, 
                 line_species=meta_param['line_species'], 
-                line_profile=meta_param['line_sig_amps'])
+                line_profile=meta_param['line_profile'])
 
         elif 'rhl' in meta_param.keys():
             self.emission_line_model = EmissionLine(

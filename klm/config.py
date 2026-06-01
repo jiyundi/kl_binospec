@@ -36,7 +36,7 @@ class Config():
             self.likelihood.apply_rhl_constraint = True
         else:
             self.likelihood.apply_rhl_constraint = False
-            print('Note config.py: Not applying r_hl_bulge < r_hl_disk.')
+            # print('Note config.py: Not applying r_hl_bulge < r_hl_disk.')
             
         line_species = config_dict['galaxy_params']['line_species']
         num_spectra  = max(Counter(line_species).values())
@@ -48,7 +48,7 @@ class Config():
                 self.likelihood.num_spectra = num_spectra
             else:
                 self.likelihood.apply_line_flux_constraint = False
-                print('Note config.py: Not applying flux > bkg constraint.')
+                # print('Note config.py: Not applying flux > bkg constraint.')
         
 
     def init_galaxy_params(self, config_dict):
@@ -90,7 +90,7 @@ class Config():
         for attr in self.galaxy_params.__dict__:
             if getattr(self.galaxy_params, attr) is None:
                 if attr == 'line_profile_path':
-                    print('Note config.py: line_profile_path is set to None')
+                    # print('Note config.py: line_profile_path is set to None')
                     continue
 
                 raise ValueError(f'{attr} is not set in galaxy_params')
@@ -129,7 +129,7 @@ class Config():
             self.TFprior.b = b
 
         else:
-            print('Note config.py: TF prior not specified. Using default values.')
+            # print('Note config.py: TF prior not specified. Using default values.')
             self._init_TF_relation()
     
     def init_truevalues(self, config_dict):

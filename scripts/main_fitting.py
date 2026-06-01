@@ -25,14 +25,16 @@ plt.rcParams.update({
 def load_mock(pkl_folder='mock/', Ms_folder='./', slit_num=95, 
               rescale_image=False):
     with open(f'{pkl_folder}pkl/slit_{slit_num:03d}.pkl', "rb") as f:
-        data_info = joblib.load(f)
+        data_info_raw = joblib.load(f)
     
+    data_info = data_info_raw.copy()
     assert data_info['galaxy']['log10_Mstar'] != None, \
         "Cannot find corresponing stallar mass M*"  # if not, error
     
     # Recover wcs(galsim.wcs) from ap_wcs
-    ap_wcs  = data_info['image']['par_meta']['ap_wcs']
-    data_info['image']['par_meta']['wcs'] = galsim.AstropyWCS(wcs=ap_wcs)
+    ap_wcs  = data_info['image']['meta']['ap_wcs']
+    data_info['image']['meta']['wcs'] = galsim.AstropyWCS(wcs=ap_wcs)
+    
     return data_info
 
 
@@ -54,10 +56,10 @@ def load_mock(pkl_folder='mock/', Ms_folder='./', slit_num=95,
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
-    parser.add_argument('--slitID', default=  138, type=int)
+    parser.add_argument('--slitID', default=   24, type=int)
     parser.add_argument('--run',    default=    1, type=int)
     # Warning: ONLY input True if you want following two arguments 
-    #          because of bool("non_empty_str") == True.
+    #          because of bool("True"/"False") == True.
     parser.add_argument('--test',   default=False, type=bool)
     parser.add_argument('--contin', default=False, type=bool)
     slit_name = parser.parse_args().slitID
@@ -75,6 +77,7 @@ if __name__ == '__main__':
     # if_continue_last_run = False # True 
     
     # ------------- 1. Load observation data or mock ---------------- #
+    print(f'\nFitting for Slit {slit_name:03d}..............................................................')
     try:
         data_info = load_mock(pkl_folder, Ms_folder, slit_name)
         
@@ -91,7 +94,7 @@ if __name__ == '__main__':
     
     linespecies = []
     for spec in data_info['spec']:
-        linespecies.append(spec['par_meta']['line_species'])
+        linespecies.append(spec['meta']['line_species'])
     
     config_dic = make_config_dic(
         linespecies, fitting_params, fid_params, 
@@ -102,6 +105,8 @@ if __name__ == '__main__':
     
     nautilus_sampler = NautilusSampler(data_info, config_dic)
     for par, prior in nautilus_sampler.config.params.prior.items(): print(par, prior)
+    
+    # if_test = True
     
     # ------------- 3. Start fitting --------------------------- #
     t_start = time.time()
@@ -151,11 +156,15 @@ if __name__ == '__main__':
         )
     best_fit_dict  = nautilus_sampler.params.gen_param_dict(fitting_par.keys(), 
                                                             best_dict.values())
-    plot_obs_fit_res(data_info, 
-                     nautilus_sampler, 
-                     best_fit_dict, 
-                     fitting_params, 
-                     slit_name, save_path=save_path)
+    if if_test is False:
+        plot_obs_fit_res(data_info, 
+                         nautilus_sampler, 
+                         best_fit_dict, 
+                         fitting_params, 
+                         slit_name, save_path=save_path)
+        print('Plotting done.')
+    else:
+        print('Best-fit plotting skipped because this is a test run.')
     
     # Plot - corner
     from core.plot_corner import plot_corner
@@ -174,3 +183,4 @@ if __name__ == '__main__':
         print('Plotting done.')
     else:
         print('Corner plotting skipped because this is a test run.')
+        print('Test run finished.\n')
