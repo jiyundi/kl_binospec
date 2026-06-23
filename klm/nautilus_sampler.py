@@ -9,8 +9,8 @@ class NautilusSampler(KLInference):
     Sub-class for parameter inference using nested sampling
     '''
 
-    def __init__(self, data_info=None, config=None):
-        KLInference.__init__(self, data_info, config)
+    def __init__(self, data_info=None, config=None, verbose=True):
+        KLInference.__init__(self, data_info, config, verbose)
         self.n_params = len(self.config.params.names)
 
         # For deltax_vel/deltay_vel

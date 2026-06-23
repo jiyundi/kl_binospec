@@ -4,7 +4,7 @@ import shutil
 all_runs_dir     = Path("../../../RSCH3/kl_github/.")
 all_runs_dir_des = Path('../../../RSCH3/kl_github/the_converted/.')
 
-# 如果你想先看看会发生什么，把 DRY_RUN=True
+# If test, DRY_RUN=True
 DRY_RUN = False # True 
 
 for runs_dir in all_runs_dir.glob("runs_20260421"):
@@ -27,7 +27,6 @@ for runs_dir in all_runs_dir.glob("runs_20260421"):
             target_runs.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(slit_dir, target_runs)
 
-    # 如果 runs_2026xxxx 变空，可以选择删
     if not DRY_RUN and not any(runs_dir.iterdir()):
         runs_dir.rmdir()
 

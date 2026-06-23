@@ -22,8 +22,7 @@ plt.rcParams.update({
 })
 
 
-def load_mock(pkl_folder='mock/', Ms_folder='./', slit_num=95, 
-              rescale_image=False):
+def load_mock(pkl_folder='mock/', slit_num=95):
     with open(f'{pkl_folder}pkl/slit_{slit_num:03d}.pkl', "rb") as f:
         data_info_raw = joblib.load(f)
     
@@ -135,6 +134,28 @@ if __name__ == '__main__':
     # Save best fit points
     best = points[np.argmax(log_l)]
     best_dict = dict(zip(nautilus_sampler.config.params.names, best))
+    
+    # Compute posterior weights
+    weights /= weights.sum()
+    
+    # Median: weighted percentile for each parameter
+    median_point = np.array([
+        np.interp(0.5, np.cumsum(w := weights[np.argsort(points[:, i])]), 
+                  points[np.argsort(points[:, i]), i])
+        for i in range(points.shape[1])
+    ])
+    median_dict = dict(zip(nautilus_sampler.config.params.names, median_point))
+    
+    # Mode: weighted KDE for each parameter
+    from scipy.stats import gaussian_kde
+    mode_point = np.array([
+        (lambda p, x: x[np.argmax(gaussian_kde(p, weights=weights, bw_method='scott')(x))])(
+            points[:, i], np.linspace(points[:, i].min(), points[:, i].max(), 1000)
+        )
+        for i in range(points.shape[1])
+    ])
+    mode_dict = dict(zip(nautilus_sampler.config.params.names, mode_point))
+    
     out = { 
         # Note: json does not support array.
         "fid_params":     fid_params, 
@@ -142,6 +163,12 @@ if __name__ == '__main__':
         "maximum_likelihood": {
             "point": best_dict,
             "log_likelihood": float(np.max(log_l))
+        },
+        "posterior_median": {
+            "point": {k: float(v) for k, v in median_dict.items()}
+        },
+        "posterior_mode": {
+            "point": {k: float(v) for k, v in mode_dict.items()}
         }
     }
     with open(slit_folder + "best_fit.json", "w", encoding="utf-8") as f:

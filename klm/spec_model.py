@@ -44,12 +44,13 @@ class SlitModel(KinematicModel):
     Class for creating model spectrum
     '''
     def __init__(self, obj_param=None, meta_param=None, 
-                 line_profile=None, redo_data=None, rc_type='arctan'):
+                 line_profile=None, redo_data=None, 
+                 rc_type='arctan', verbose=True):
         self.velocity_model = VelocityModel(rc_type)
         self._init_observable(obj_param, meta_param)
 
         self.sigma_intr = 0.01*u.nm
-        self.line_name, self.line_wav = Parameters()._get_species(
+        self.line_name, self.line_wav = Parameters._get_species(
             meta_param['line_species'], obj_param['redshift']
             )
 

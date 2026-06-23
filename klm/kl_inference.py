@@ -10,7 +10,7 @@ class KLInference():
     Base class for KL inference
     '''
 
-    def __init__(self, data_info, config):
+    def __init__(self, data_info, config, verbose=True):
         '''
         Initializes the KLInference object.
 
@@ -21,7 +21,7 @@ class KLInference():
         '''
         self.config = Config(config)
 
-        self._init_data(data_info)
+        self._init_data(data_info, verbose)
 
         if self.config.likelihood.fid_params is not None:
             fid_params = self.config.likelihood.fid_params
@@ -52,7 +52,7 @@ class KLInference():
                     [spec[i]['meta']['line_species'] for i in range(len(spec))]
                     )
                     
-    def _init_data(self, data_info):
+    def _init_data(self, data_info, verbose=True):
         self.meta_gal = data_info['galaxy']
         if self.config.likelihood.isFitImage:
             self.meta_image = data_info['image']['meta']
@@ -64,15 +64,12 @@ class KLInference():
 
         if self.config.galaxy_params.obs_type == 'slit':
             self.params = Parameters(
-                # {'shared_params': {
-                #     'beta':self.meta_gal['beta']
-                #     }
-                # }, 
-                line_species=self.config.galaxy_params.line_species
+                line_species=self.config.galaxy_params.line_species,
+                verbose=verbose
                 )
 
             self._spectrum_loglike = self._loglike_slit
-            self._init_slit_data(data_info)
+            self._init_slit_data(data_info, verbose)
             # self.fit_params = FitParameters(self.config.fit_param_names, line_species=self.config.line_species)
 
         elif self.config.galaxy_params.obs_type == 'IFU':
@@ -83,7 +80,7 @@ class KLInference():
             # self.fit_params = FitParameters(self.config.fit_param_names, line_species=[self.config.vmap_type])
 
 
-    def _init_slit_data(self, data_info):
+    def _init_slit_data(self, data_info, verbose=True):
         '''
         Initializes slit data.
 
@@ -114,7 +111,8 @@ class KLInference():
                 meta_param=this_spec['meta'], 
                 line_profile=self.config.galaxy_params.line_profile_path,
                 redo_data=this_spec['data'],
-                rc_type=self.config.galaxy_params.rc_type
+                rc_type=self.config.galaxy_params.rc_type,
+                verbose=verbose
                 )
             self.spec_model.append(S)
                 

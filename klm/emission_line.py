@@ -111,7 +111,7 @@ class EmissionLine:
         sigma1 = np.ones((len(slit_grid), 2)) * 1.0*u.Angstrom
         sigma2 = np.ones((len(slit_grid), 2)) * 1.0*u.Angstrom
 
-
+        if rhl is None: rhl = 1
         intensity_profile = np.exp(-np.abs(slit_grid)/rhl)
         Amp = np.column_stack((intensity_profile, intensity_profile))
 

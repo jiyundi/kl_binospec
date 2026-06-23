@@ -90,7 +90,7 @@ class Config():
         for attr in self.galaxy_params.__dict__:
             if getattr(self.galaxy_params, attr) is None:
                 if attr == 'line_profile_path':
-                    # print('Note config.py: line_profile_path is set to None')
+                    print('Note config.py: line_profile_path is set to None')
                     continue
 
                 raise ValueError(f'{attr} is not set in galaxy_params')

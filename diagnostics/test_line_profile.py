@@ -4,8 +4,8 @@ from   scipy.ndimage  import median_filter
 import matplotlib.pyplot as plt
 
 from core.post_fitting import deduplicate_ordered, complete_fit_params
-from core.line_width_profile import find_line_sigma, _gaussian, _double_gaussian
-from core.line_width_profile import _gaussian_nonzero, _double_gaussian_nonzero
+from data_prep.spec.line_width_profile import find_line_sigma, _gaussian, _double_gaussian
+from data_prep.spec.line_width_profile import _gaussian_nonzero, _double_gaussian_nonzero
 
 
 def another_load_mock(pkl_folder, if_wcs, slit_num=95):
@@ -14,8 +14,8 @@ def another_load_mock(pkl_folder, if_wcs, slit_num=95):
     
     if if_wcs:
         import galsim
-        ap_wcs  = data_info['image']['par_meta']['ap_wcs']
-        data_info['image']['par_meta']['wcs'] = galsim.AstropyWCS(wcs=ap_wcs)
+        ap_wcs  = data_info['image']['meta']['ap_wcs']
+        data_info['image']['meta']['wcs'] = galsim.AstropyWCS(wcs=ap_wcs)
     
     return data_info
 
@@ -54,7 +54,7 @@ def make_spec_from_best_fit(inference, best_fit_dict, fitting_par,
     
     inference.spec_model[i]._init_observable(
         data_info['galaxy'],
-        data_info['spec'][i]['par_meta'],
+        data_info['spec'][i]['meta'],
     )
     
     # Collapse per-set intensity keys (I01_specN → I01) for this row
@@ -100,18 +100,18 @@ def add_colorbar_by_alpha(ax, color, label='label', bar_low=0, bar_high=1):
 
 
 if __name__ == '__main__':
-    pkl_folder = '../scripts/binospec_pkl/'
+    pkl_folder = './scripts/binospec_pkl/'
     fit_mode   = 'y0!=0'
     test_model = True # False, 
     redo       = False # True,   
-    lambda_scale = 0.24
+    lambda_scale = 0.61 # A/px
     date_of_run_new = './'
-    fiduci_yaml =  "../config/binospec_fid_params.yaml"
-    fittin_yaml =  "../config/binospec_fitting_params.yaml"
+    fiduci_yaml =  "./config/binospec_fid_params.yaml"
+    fittin_yaml =  "./config/binospec_fitting_params.yaml"
             
-    for slit_num in [91,95,107,136,138]: #  97
+    for slit_num in [17]:
         # Load
-        run_dir_new = f'../scripts/Slit_{slit_num:03d}_/'
+        run_dir_new = f'./scripts/Slit_{slit_num:03d}/'
         data_info  = another_load_mock(pkl_folder, if_wcs=test_model, 
                                        slit_num=slit_num)
         
@@ -125,7 +125,7 @@ if __name__ == '__main__':
             spec_data  = data_info['spec'][spec_idx]['data']
             spec_mask  = data_info['spec'][spec_idx]['mask']
             
-            line_species  = data_info['spec'][spec_idx]['par_meta']['line_species']
+            line_species  = data_info['spec'][spec_idx]['meta']['line_species']
             
             arr = np.where(spec_mask, spec_data, np.nan)
             
@@ -142,13 +142,13 @@ if __name__ == '__main__':
                 x0_sigma_amp_2s.append(x0_sigma_amp_2)
         
                 for spec_idx in range(len(data_info['spec'])):
-                    data_info['spec'][spec_idx]['par_meta']['line_sig_amps'] = [
+                    data_info['spec'][spec_idx]['meta']['line_sig_amps'] = [
                         x0_sigma_amp_1s[spec_idx].copy(),
                         x0_sigma_amp_2s[spec_idx].copy()
                         ]
                 
             else:
-                x0_sigma_amp_1, x0_sigma_amp_2 = data_info['spec'][spec_idx]['par_meta']['line_sig_amps']
+                x0_sigma_amp_1, x0_sigma_amp_2 = data_info['spec'][spec_idx]['meta']['line_profile']
             
                 x0_sigma_amp_1s.append(x0_sigma_amp_1)
                 x0_sigma_amp_2s.append(x0_sigma_amp_2)
@@ -207,7 +207,7 @@ if __name__ == '__main__':
             
             linespecies = []
             for spec in data_info['spec']:
-                linespecies.append(spec['par_meta']['line_species'])
+                linespecies.append(spec['meta']['line_species'])
             
             config_dic = make_config_dic(
                 linespecies, fitting_params, fid_params, 
@@ -286,7 +286,7 @@ if __name__ == '__main__':
                 x0_sigma_amp_1 = x0_sigma_amp_1s[spec_idx][1:].astype(float).copy()
                 x0_sigma_amp_2 = x0_sigma_amp_2s[spec_idx][1:].astype(float).copy()
             else:
-                x0_sigma_amp_1, x0_sigma_amp_2 = data_info['spec'][spec_idx]['par_meta']['line_sig_amps']
+                x0_sigma_amp_1, x0_sigma_amp_2 = data_info['spec'][spec_idx]['meta']['line_profile']
                 x0_sigma_amp_1 = x0_sigma_amp_1[1:].astype(float).copy()
                 x0_sigma_amp_2 = x0_sigma_amp_2[1:].astype(float).copy()
             

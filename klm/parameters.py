@@ -18,7 +18,7 @@ class Parameters():
     '''
     Class for kl_measurement pars
     '''
-    def __init__(self, input_params=None, line_species=['Ha']):
+    def __init__(self, input_params=None, line_species=['Ha'], verbose=True):
         """_summary_
 
         Parameters
@@ -31,7 +31,7 @@ class Parameters():
         """
         self.params = self._get_default_params(line_species)
         self._update_params(input_params, line_species)
-
+        self.print_updates = verbose
         # self.params['central_wavelength'] = self._get_species(line_species, self.params['redshift'])
         self.names = list(self._flatten(self.params).keys())
 
@@ -136,7 +136,8 @@ class Parameters():
                 if key in self.params.keys():
                     new_params = input_params[key]
                     for name, value in new_params.items():
-                        print(f'Updating {name:10} in {key}: {name:10} = {value}')
+                        if self.print_updates: 
+                            print(f'Updating {name:10} in {key}: {name:10} = {value}')
                         self.params[key][name] = value
                 
                 # Now input_params keys: shared/line_params 
@@ -147,7 +148,7 @@ class Parameters():
                             self_params_key = f'{line}_params'
                             new_params = input_params['line_params']
                             for name, value in new_params.items():
-                                print(f'Updating {name:15} in {self_params_key}: {name:15} = {value}')
+                                if self.print_updates: print(f'Updating {name:15} in {self_params_key}: {name:15} = {value}')
                                 self.params[self_params_key][name] = value
                 
                 else:
