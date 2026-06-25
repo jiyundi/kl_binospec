@@ -109,20 +109,31 @@ def _draw_shear_column(fig, gs, col, kind,
         ax2 = fig.add_subplot(gs[1, col])
         ax3 = fig.add_subplot(gs[2, col])
     
+    # ax2_ymin, ax2_ymax = ax2.get_ylim()
+    ax2_ymin, ax2_ymax = -0.30, 0.42
+    ax2_xmin, ax2_xmax =     0, 16.5
+    
     # Umetsu+14 CLASH (A383) WL profile - degitized
+    U14_N_bkg_total = 7602 # (A383)
     U14_beta_avg = 0.79 # (A383)
-    if share_axs is None:
-        U14_Rs_gts = np.array([[ 1.055, 0.265],
-                               [ 1.418, 0.229],
-                               [ 1.879, 0.120],
-                               [ 2.505, 0.082],
-                               [ 3.330, 0.070],
-                               [ 4.451, 0.067],
-                               [ 5.934, 0.036],
-                               [ 7.912, 0.000],
-                               [10.549, 0.022],
-                               [14.110, 0.029] ])
-        U14_Rs_gts[:, 1] = U14_Rs_gts[:, 1]
+    n_bins = 10
+    R_min  =  0.9
+    R_max  = 16.0
+    delta_ln = (np.log(R_max) - np.log(R_min)) / n_bins
+    ln_edges = np.log(R_min) + np.arange(n_bins + 1) * delta_ln # log-scale edges
+    
+    # Midpoint of linear edges
+    lin_edges = np.exp(ln_edges)
+    U14_Rs    = (lin_edges[1:] + lin_edges[:-1]) / 2
+    U14_area_each_bin = (lin_edges[1:]**2 - lin_edges[:-1]**2) * np.pi
+    
+    # Mean surface number density (arcmin-2, A383), should = 9.3
+    U14_surf_den_bkg   = U14_N_bkg_total / np.sum(U14_area_each_bin)
+    U14_N_bkg_each_bin = U14_area_each_bin * U14_surf_den_bkg
+    
+    if share_axs is not None:
+        U14_gts = np.array([0.265, 0.229, 0.120, 0.082, 0.070, 
+                            0.067, 0.036, 0.000, 0.022, 0.029 ])
         U14_gts_hi    = np.array([0.381, 0.291,  0.162, 0.123, 0.097, 
                                   0.084, 0.050,  0.012, 0.031, 0.038])
         U14_gts_lo    = np.array([0.150, 0.169,  0.075, 0.044, 0.043, 
@@ -131,15 +142,17 @@ def _draw_shear_column(fig, gs, col, kind,
                                   0.079, 0.043,  0.012, 0.031, 0.034])
         U14_gts_CL_lo = np.array([0.120, 0.171,  0.099, 0.062, 0.031, 
                                   0.044, 0.017, -0.010, 0.015, 0.022])
-        ax2.fill_between(x=U14_Rs_gts[:,0], 
+        ax2.fill_between(x=U14_Rs, 
                          y1=U14_gts_CL_hi, y2=U14_gts_CL_lo, 
                          color='mistyrose', alpha=0.5, zorder=0.5)
-        ax3.fill_between(x=U14_Rs_gts[:,0], 
+        ax3.fill_between(x=U14_Rs, 
                          y1=U14_gts_CL_hi, y2=U14_gts_CL_lo, 
                          color='mistyrose', alpha=0.5, zorder=0.5)
-        ax2.errorbar(U14_Rs_gts[:,0], U14_Rs_gts[:,1], 
-                     yerr=[U14_gts_hi - U14_Rs_gts[:,1], 
-                           U14_Rs_gts[:,1] - U14_gts_lo], 
+        ax2.errorbar(U14_Rs, U14_gts, 
+                     yerr=[U14_gts_hi - U14_gts, 
+                           U14_gts    - U14_gts_lo ], 
+                     xerr=[U14_Rs        - lin_edges[:-1],
+                           lin_edges[1:] - U14_Rs         ],
                      fmt='', capsize=3, capthick=1, elinewidth=1, 
                      ecolor=(0.5, 3/8, 3/8), marker='s', markersize=3, 
                      markerfacecolor=(0.5, 3/8, 3/8), 
@@ -147,16 +160,25 @@ def _draw_shear_column(fig, gs, col, kind,
                      color=(0.5, 3/8, 3/8), lw=1, linestyle=':', 
                      label=r'$g_+$: Umetsu+14 (A383)', 
                      zorder=1.5)
-        ax3.errorbar(U14_Rs_gts[:,0], U14_Rs_gts[:,1], 
-                     yerr=[U14_gts_hi - U14_Rs_gts[:,1], 
-                           U14_Rs_gts[:,1] - U14_gts_lo], 
-                     fmt='', capsize=6, capthick=1, elinewidth=1, 
+        ax3.errorbar(U14_Rs, U14_gts, 
+                     yerr=[U14_gts_hi - U14_gts, 
+                           U14_gts    - U14_gts_lo ], 
+                     xerr=[U14_Rs        - lin_edges[:-1],
+                           lin_edges[1:] - U14_Rs         ],
+                     fmt='', capsize=3, capthick=1, elinewidth=1, 
                      ecolor=(0.5, 3/8, 3/8), marker='s', markersize=3,  
                      markerfacecolor=(0.5, 3/8, 3/8), 
                      markeredgecolor=(0.5, 3/8, 3/8), 
                      color=(0.5, 3/8, 3/8), lw=1, linestyle=':', 
                      label=r'$g_+$: Umetsu+14 (A383)', 
                      zorder=1.5)
+        for U14_R, U14_gt_lo, U14_N_bkg in \
+            zip(U14_Rs, U14_gts_lo, U14_N_bkg_each_bin):
+            # ax2.text(U14_R, U14_gt_lo, f'{int(round(U14_N_bkg, 0))}', 
+            #          color=(0.5, 3/8, 3/8), fontsize=8, zorder=4, va='center')
+            ax3.text(U14_R, U14_gt_lo-0.01, f'({int(round(U14_N_bkg, 0))})', 
+                     color=(0.5, 3/8, 3/8), fontsize=6, va='top', ha='center',
+                     zorder=4)
     
     # Pranjal+24 results (A2261) -- only overplotted on the tangential (gt) panel
     if (kind == 'gt') or (share_axs is not None):
@@ -166,7 +188,7 @@ def _draw_shear_column(fig, gs, col, kind,
         P24_gts    = np.array([ 0.208,  0.041,  0.144])
         P24_gterrs = np.array([ 0.020,  0.038,  0.030])
         P24_d_L    = proper_a_d_distance_calc(0.224, 70, 0.3)
-        U14_beta_2261 = U14_beta_avg#0.70
+        U14_beta_2261 = U14_beta_avg # 0.70
         
         # Calibrate gt and gx
         P24_facs = np.array([])
@@ -179,8 +201,10 @@ def _draw_shear_column(fig, gs, col, kind,
         
         for N_, R_, Gt_, Gte_, Fac_ \
             in zip(P24_names, P24_Rs, P24_gts, P24_gterrs, P24_facs):
-            ax2.text(1/8+ R_, Gt_ * Fac_, N_, color='magenta', fontsize=8, zorder=4)
-            ax3.text(1/8+ R_, Gt_ * Fac_, N_, color='magenta', fontsize=8, zorder=4)
+            # ax2.text(1/8+ R_, Gt_ * Fac_, N_, 
+            #          color='magenta', fontsize=8, zorder=4, va='center')
+            ax3.text(1/8+ R_, Gt_ * Fac_, N_, 
+                     color='magenta', fontsize=8, zorder=4, va='center')
             if share_axs is None:
                 ax2.errorbar( R_, Gt_ * Fac_, yerr=Gte_, 
                              capsize=4, marker='^', markersize=1, 
@@ -353,16 +377,20 @@ def _draw_shear_column(fig, gs, col, kind,
                 label=ylabel_full+f': Binospec (A383), bin size = {binsize}\'')
     
     for i in range(len(binned_R_lows)):
-        ax3.text(binned_R_lows[i]+binsize/2, 0.18-(binsize-1)*0.025, 
-                 f'(N = {binned_Nslits[i]})',
-                 fontsize=8, color='black', ha='center', va='bottom', 
-                 zorder=4)
-        if share_axs is not None:
-            ax3.text(binned_R_lows[i]+binsize/2, 0.15-(binsize-1)*0.025, 
+        if share_axs is None:
+            ax3.text(binned_R_lows[i]+binsize/2, binned_yvals[i]+0.1, 
+                     '('+r'$N_\mathrm{KL}$'+f' = {binned_Nslits[i]})',
+                     fontsize=8, color='black', ha='center', va='bottom', 
+                     zorder=4)
+        else:
+            ax3.text(binned_R_lows[i]+binsize/2, 
+                     np.max([binned_gts[i], binned_gxs[i]])+0.1, 
+                     '('+r'$N_\mathrm{KL}$'+f' = {binned_Nslits[i]})\n'+
                      f'{binned_gts[i] / binned_gterrs[i]:.1f}'+r'$\sigma$',
                      fontsize=8, color='firebrick', ha='center', va='bottom', 
                      zorder=4)
-            ax3.text(binned_R_lows[i]+binsize/2, 0.15-(binsize-1)*0.025, 
+            ax3.text(binned_R_lows[i]+binsize/2, 
+                     np.max([binned_gts[i], binned_gxs[i]])+0.1, 
                      f'{binned_gxs[i] / binned_gxerrs[i]:.1f}'+r'$\sigma$',
                      fontsize=8, color='mediumblue', ha='center', va='top', 
                      zorder=4)
@@ -398,8 +426,6 @@ def _draw_shear_column(fig, gs, col, kind,
     r_200 = r_500 / 0.65
     c500, c200 = draw_r500_r200(plt, ax1, r_500, r_200, color='limegreen')
     
-    # ax2_ymin, ax2_ymax = ax2.get_ylim()
-    ax2_ymin, ax2_ymax = -0.30, 0.42
     for ax in (ax2, ax3):
         ax.text(r_500/60+1/8, ax2_ymin+1/50, r'$r_{500,\mathrm{ A383}}$', color='limegreen', fontsize=12, zorder=5)
         ax.text(r_200/60+1/8, ax2_ymin+1/50, r'$r_{200,\mathrm{ A383}}$', color='limegreen', fontsize=12, zorder=5)
@@ -418,24 +444,24 @@ def _draw_shear_column(fig, gs, col, kind,
     ax1.minorticks_on()
     ax1.set_aspect(1)
     
-    ax2.set_xlim(left=0)
-    ax2.set_ylim(bottom=ax2_ymin, top=ax2_ymax)
+    ax2.set_xlim(ax2_xmin, ax2_xmax)
+    ax2.set_ylim(ax2_ymin, ax2_ymax)
     if kind == 'gx':
         ax2.axhline(y=0, linestyle='--', color='gray')
     ax2.set_xlabel(r'$R$'+' (arcmin)', fontsize=15)
     ax2.set_ylabel(r'Reduced shear', fontsize=15)
     ax2.minorticks_on()
-    ax2.legend(prop={'size': 7})
+    ax2.legend(prop={'size': 8})
     ax2.grid(linestyle=':', color='black', alpha=0.5, zorder=0)
     
-    ax3.set_xlim(left=0)
-    ax3.set_ylim(bottom=ax2_ymin, top=ax2_ymax)
+    ax3.set_xlim(ax2_xmin, ax2_xmax)
+    ax3.set_ylim(ax2_ymin, ax2_ymax)
     if kind == 'gx':
         ax3.axhline(y=0, linestyle='--', color='gray')
     ax3.set_xlabel(r'$R$'+' (arcmin)', fontsize=15)
     ax3.set_ylabel(r'Binned reduced shear', fontsize=15)
     ax3.minorticks_on()
-    ax3.legend(prop={'size': 6})
+    ax3.legend(prop={'size': 7})
     ax3.grid(linestyle=':', color='black', alpha=0.5, zorder=0)
     
     return ax1, ax2, ax3

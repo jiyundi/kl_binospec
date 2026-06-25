@@ -100,23 +100,26 @@ def add_colorbar_by_alpha(ax, color, label='label', bar_low=0, bar_high=1):
 
 
 if __name__ == '__main__':
-    pkl_folder = './scripts/binospec_pkl/'
+    pkl_folder = '../scripts/binospec_pkl/'
     fit_mode   = 'y0!=0'
-    test_model = True # False, 
-    redo       = False # True,   
+    test_model = False # , True
+    redo       = True # ,   False
     lambda_scale = 0.61 # A/px
     date_of_run_new = './'
     fiduci_yaml =  "./config/binospec_fid_params.yaml"
     fittin_yaml =  "./config/binospec_fitting_params.yaml"
             
-    for slit_num in [17]:
+    for slit_num in [10]:
+        run_dir_new = f'../scripts/Slit_{slit_num:03d}/'
+        
         # Load
-        run_dir_new = f'./scripts/Slit_{slit_num:03d}/'
         data_info  = another_load_mock(pkl_folder, if_wcs=test_model, 
                                        slit_num=slit_num)
         
+        spec_idx_start = 0
+        spec_idx_end   = len(data_info['spec']) - 1
         smootheds, lw_restoreds, x0_sigma_amp_1s, x0_sigma_amp_2s = [], [], [], []
-        for spec_idx in range(len(data_info['spec'])):
+        for spec_idx in range(spec_idx_start, spec_idx_end+1):
         
             # ABOVE: Before line profile
             # =================================================================
@@ -133,19 +136,26 @@ if __name__ == '__main__':
             smoothed = median_filter(arr, size=patch_size)
             smootheds.append(smoothed)
             
+            # data = spec_data[spec_mask]
+            # bkg_level = np.mean(data[data < 3*np.std(spec_data[spec_mask])])
             if redo:
                 x0_sigma_amp_1, x0_sigma_amp_2 = find_line_sigma(
-                    smoothed, line_species, fit_mode, lambda_scale
+                    # np.where(np.isnan(smoothed), bkg_level, smoothed),
+                    smoothed, 
+                    line_species, fit_mode, lambda_scale
                     )
                 
                 x0_sigma_amp_1s.append(x0_sigma_amp_1)
                 x0_sigma_amp_2s.append(x0_sigma_amp_2)
         
-                for spec_idx in range(len(data_info['spec'])):
+                # for spec_idx in range(len(data_info['spec'])):
+                try:
                     data_info['spec'][spec_idx]['meta']['line_sig_amps'] = [
-                        x0_sigma_amp_1s[spec_idx].copy(),
-                        x0_sigma_amp_2s[spec_idx].copy()
+                        x0_sigma_amp_1s[spec_idx - spec_idx_start].copy(),
+                        x0_sigma_amp_2s[spec_idx - spec_idx_start].copy()
                         ]
+                except IndexError: 
+                    print(spec_idx)
                 
             else:
                 x0_sigma_amp_1, x0_sigma_amp_2 = data_info['spec'][spec_idx]['meta']['line_profile']
@@ -157,10 +167,10 @@ if __name__ == '__main__':
         del x0_sigma_amp_1, x0_sigma_amp_2
 
             
-        for spec_idx in range(len(data_info['spec'])):
+        for spec_idx in range(spec_idx_start, spec_idx_end+1):
             # sigma Angstrom --> pixels for line restoration only
-            xsa1_in_pixels = x0_sigma_amp_1s[spec_idx].copy() # COPY: OTHERWISE YOU WILL 
-            xsa2_in_pixels = x0_sigma_amp_2s[spec_idx].copy() #       DESTROY x0_sigma_amp_1s
+            xsa1_in_pixels = x0_sigma_amp_1s[spec_idx - spec_idx_start].copy() # COPY: OTHERWISE YOU WILL 
+            xsa2_in_pixels = x0_sigma_amp_2s[spec_idx - spec_idx_start].copy() #       DESTROY x0_sigma_amp_1s
             xsa1_in_pixels[1:, 1] = xsa1_in_pixels[1:, 1].astype(float) / lambda_scale
             xsa2_in_pixels[1:, 1] = xsa2_in_pixels[1:, 1].astype(float) / lambda_scale
             
@@ -228,7 +238,7 @@ if __name__ == '__main__':
             
             # config_dic['galaxy_params']['line_profile_path'] = 'extracted'
             spec_fits_new = []
-            for spec_idx in range(len(data_info['spec'])):
+            for spec_idx in range(spec_idx_start, spec_idx_end+1):
                 spec_fit_new = make_spec_from_best_fit(
                     nautilus_sampler_new, best_fit_params, fitting_params, 
                     spec_idx, set_num=spec_idx%3+1
@@ -240,7 +250,7 @@ if __name__ == '__main__':
                              for spec_idx in range(len(data_info['spec']))]
             
 
-        for spec_idx in range(len(data_info['spec'])):
+        for spec_idx in range(spec_idx_start, spec_idx_end+1):
             fig, ax = plt.subplots(nrows=4, ncols=3, figsize=(10,12))
             plt.subplots_adjust(hspace=0.4, wspace=0.3)
             ax[0,2].remove()
@@ -254,16 +264,16 @@ if __name__ == '__main__':
                 np.where(spec_mask, spec_data, np.nan), 
                 aspect='auto', cmap='viridis')
             
-            vmin = np.nanmin(smootheds[spec_idx])
-            vmax = np.nanmax(smootheds[spec_idx])
+            vmin = np.nanmin(smootheds[spec_idx - spec_idx_start])
+            vmax = np.nanmax(smootheds[spec_idx - spec_idx_start])
             im1 = ax[1,0].imshow(
-                np.where(spec_mask, smootheds[spec_idx], np.nan), 
+                np.where(spec_mask, smootheds[spec_idx - spec_idx_start], np.nan), 
                 aspect='auto', cmap='viridis')
             im2 = ax[1,1].imshow(
-                lw_restoreds[spec_idx], 
+                lw_restoreds[spec_idx - spec_idx_start], 
                 aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
             im3 = ax[1,2].imshow(
-                np.where(spec_mask, smootheds[spec_idx] - lw_restoreds[spec_idx], np.nan), 
+                np.where(spec_mask, smootheds[spec_idx - spec_idx_start] - lw_restoreds[spec_idx - spec_idx_start], np.nan), 
                 aspect='auto', cmap='coolwarm', vmin=-vmax, vmax=vmax)
             im5 = ax[2,1].imshow(np.where(spec_mask, spec_fits_new[spec_idx], np.nan), 
                                  aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
@@ -271,7 +281,7 @@ if __name__ == '__main__':
                                  aspect='auto', cmap='coolwarm', vmin=-vmax, vmax=vmax)
             im8 = ax[3,1].imshow(np.where(spec_mask, median_filter(spec_fits_new[spec_idx], size=patch_size), np.nan), 
                                  aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
-            im9 = ax[3,2].imshow(np.where(spec_mask, smootheds[spec_idx] - median_filter(spec_fits_new[spec_idx], size=patch_size), np.nan), 
+            im9 = ax[3,2].imshow(np.where(spec_mask, smootheds[spec_idx - spec_idx_start] - median_filter(spec_fits_new[spec_idx], size=patch_size), np.nan), 
                                  aspect='auto', cmap='coolwarm', vmin=-vmax, vmax=vmax)
             plt.colorbar(im0, ax=ax[0,0])
             plt.colorbar(im1, ax=ax[1,0])
@@ -283,8 +293,8 @@ if __name__ == '__main__':
             plt.colorbar(im9, ax=ax[3,2])
             
             if redo:
-                x0_sigma_amp_1 = x0_sigma_amp_1s[spec_idx][1:].astype(float).copy()
-                x0_sigma_amp_2 = x0_sigma_amp_2s[spec_idx][1:].astype(float).copy()
+                x0_sigma_amp_1 = x0_sigma_amp_1s[spec_idx - spec_idx_start][1:].astype(float).copy()
+                x0_sigma_amp_2 = x0_sigma_amp_2s[spec_idx - spec_idx_start][1:].astype(float).copy()
             else:
                 x0_sigma_amp_1, x0_sigma_amp_2 = data_info['spec'][spec_idx]['meta']['line_profile']
                 x0_sigma_amp_1 = x0_sigma_amp_1[1:].astype(float).copy()
@@ -334,7 +344,7 @@ if __name__ == '__main__':
             ax[2,2].set_title('Data - Model')
             ax[3,1].set_title(f'median filtered model ({patch_size}x{patch_size})')
             ax[3,2].set_title('Filtered data - Filtered model')
-            plt.savefig(f'{slit_num}_{spec_idx+1}_line_profile_redo{redo}.jpg', dpi=100, bbox_inches='tight')
+            plt.savefig(f'_{slit_num}_{spec_idx+1}_line_profile_redo{redo}_testmodel{test_model}.jpg', dpi=100, bbox_inches='tight')
 
         print('Done.')
 
