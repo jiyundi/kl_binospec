@@ -243,9 +243,6 @@ class KLInference():
         
         log_like  = np.sum(resi2 / var_total)
         
-        if log_like <= 0:
-            print()
-        
         assert log_like >= 0, 'Found negative var_total in spec log_like'
         
         return log_like

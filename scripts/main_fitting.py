@@ -30,6 +30,17 @@ def load_mock(pkl_folder='mock/', slit_num=95):
     assert data_info['galaxy']['log10_Mstar'] != None, \
         "Cannot find corresponing stallar mass M*"  # if not, error
     
+    image_data = data_info['image']['data']
+    image_mask = data_info['image']['mask']
+    assert ~np.any(np.isnan(image_data[image_mask])), \
+        "Image: contains NaN pixel values."
+    
+    for i in range(len(data_info['spec'])):
+        spec_data = data_info['spec'][i]['data']
+        spec_mask = data_info['spec'][i]['mask']
+        assert ~np.any(np.isnan(spec_data[spec_mask])), \
+            f"Spec {i}: contains NaN pixel values."
+    
     # Recover wcs(galsim.wcs) from ap_wcs
     ap_wcs  = data_info['image']['meta']['ap_wcs']
     data_info['image']['meta']['wcs'] = galsim.AstropyWCS(wcs=ap_wcs)
@@ -55,8 +66,8 @@ def load_mock(pkl_folder='mock/', slit_num=95):
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
-    parser.add_argument('--slitID', default=   24, type=int)
-    parser.add_argument('--run',    default=    1, type=int)
+    parser.add_argument('--slitID', default= 23, type=int)
+    parser.add_argument('--run',    default=  1, type=int)
     # Warning: ONLY input True if you want following two arguments 
     #          because of bool("True"/"False") == True.
     parser.add_argument('--test',   default=False, type=bool)
@@ -78,7 +89,7 @@ if __name__ == '__main__':
     # ------------- 1. Load observation data or mock ---------------- #
     print(f'\nFitting for Slit {slit_name:03d}..............................................................')
     try:
-        data_info = load_mock(pkl_folder, Ms_folder, slit_name)
+        data_info = load_mock(pkl_folder, slit_name)
         
     except FileNotFoundError:
         print( "\033[43m" + 'WARNING:' + "\033[0m " + 
@@ -102,10 +113,11 @@ if __name__ == '__main__':
         use_line_profile = 'extracted', # None, 'raw' 
         )
     
-    nautilus_sampler = NautilusSampler(data_info, config_dic)
-    for par, prior in nautilus_sampler.config.params.prior.items(): print(par, prior)
+    nautilus_sampler = NautilusSampler(data_info, config_dic, (not if_test))
     
-    # if_test = True
+    if if_test is False:
+        for par, prior in nautilus_sampler.config.params.prior.items():
+            print(par, prior)
     
     # ------------- 3. Start fitting --------------------------- #
     t_start = time.time()
@@ -132,58 +144,59 @@ if __name__ == '__main__':
     )
     
     # Save best fit points
-    best = points[np.argmax(log_l)]
-    best_dict = dict(zip(nautilus_sampler.config.params.names, best))
-    
-    # Compute posterior weights
-    weights /= weights.sum()
-    
-    # Median: weighted percentile for each parameter
-    median_point = np.array([
-        np.interp(0.5, np.cumsum(w := weights[np.argsort(points[:, i])]), 
-                  points[np.argsort(points[:, i]), i])
-        for i in range(points.shape[1])
-    ])
-    median_dict = dict(zip(nautilus_sampler.config.params.names, median_point))
-    
-    # Mode: weighted KDE for each parameter
-    from scipy.stats import gaussian_kde
-    mode_point = np.array([
-        (lambda p, x: x[np.argmax(gaussian_kde(p, weights=weights, bw_method='scott')(x))])(
-            points[:, i], np.linspace(points[:, i].min(), points[:, i].max(), 1000)
-        )
-        for i in range(points.shape[1])
-    ])
-    mode_dict = dict(zip(nautilus_sampler.config.params.names, mode_point))
-    
-    out = { 
-        # Note: json does not support array.
-        "fid_params":     fid_params, 
-        "fitting_params": fitting_params, 
-        "maximum_likelihood": {
-            "point": best_dict,
-            "log_likelihood": float(np.max(log_l))
-        },
-        "posterior_median": {
-            "point": {k: float(v) for k, v in median_dict.items()}
-        },
-        "posterior_mode": {
-            "point": {k: float(v) for k, v in mode_dict.items()}
-        }
-    }
-    with open(slit_folder + "best_fit.json", "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=4)
-        
-    # Plot - best fit
-    print('Plotting best fit comparison with observed spec/image...')
-    fitting_params_flat = Parameters._flatten(fitting_params, level=1)
-    fitting_par = complete_flattened_fit_params(
-        fitting_params_flat, 
-        line_species=nautilus_sampler.config.galaxy_params.line_species
-        )
-    best_fit_dict  = nautilus_sampler.params.gen_param_dict(fitting_par.keys(), 
-                                                            best_dict.values())
     if if_test is False:
+        best = points[np.argmax(log_l)]
+        best_dict = dict(zip(nautilus_sampler.config.params.names, best))
+        
+        # Compute posterior weights
+        weights /= weights.sum()
+        
+        # Median: weighted percentile for each parameter
+        median_point = np.array([
+            np.interp(0.5, np.cumsum(w := weights[np.argsort(points[:, i])]), 
+                      points[np.argsort(points[:, i]), i])
+            for i in range(points.shape[1])
+        ])
+        median_dict = dict(zip(nautilus_sampler.config.params.names, median_point))
+        
+        # Peak (Mode): weighted KDE for each parameter
+        from scipy.stats import gaussian_kde
+        mode_point = np.array([
+            (lambda p, x: x[np.argmax(gaussian_kde(p, weights=weights, bw_method='scott')(x))])(
+                points[:, i], np.linspace(points[:, i].min(), points[:, i].max(), 1000)
+            )
+            for i in range(points.shape[1])
+        ])
+        mode_dict = dict(zip(nautilus_sampler.config.params.names, mode_point))
+        
+        out = { 
+            # Note: json does not support array.
+            "fid_params":     fid_params, 
+            "fitting_params": fitting_params, 
+            "maximum_likelihood": {
+                "point": best_dict,
+                "log_likelihood": float(np.max(log_l))
+            },
+            "posterior_median": {
+                "point": {k: float(v) for k, v in median_dict.items()}
+            },
+            "posterior_mode": {
+                "point": {k: float(v) for k, v in mode_dict.items()}
+            }
+        }
+        with open(slit_folder + "best_fit.json", "w", encoding="utf-8") as f:
+            json.dump(out, f, indent=4)
+    
+    # Plot - best fit
+    if if_test is False: 
+        print('Plotting best fit comparison with observed spec/image...')
+        fitting_params_flat = Parameters._flatten(fitting_params, level=1)
+        fitting_par = complete_flattened_fit_params(
+            fitting_params_flat, 
+            line_species=nautilus_sampler.config.galaxy_params.line_species
+            )
+        best_fit_dict  = nautilus_sampler.params.gen_param_dict(fitting_par.keys(), 
+                                                                mode_dict.values())
         plot_obs_fit_res(data_info, 
                          nautilus_sampler, 
                          best_fit_dict, 
@@ -194,8 +207,8 @@ if __name__ == '__main__':
         print('Best-fit plotting skipped because this is a test run.')
     
     # Plot - corner
-    from core.plot_corner import plot_corner
     if if_test is False:
+        from core.plot_corner import plot_corner
         post_path_new  = f'{slit_folder}post.txt'
         plot_corner(
             [post_path_new],  
@@ -209,5 +222,5 @@ if __name__ == '__main__':
             )
         print('Plotting done.')
     else:
-        print('Corner plotting skipped because this is a test run.')
+        print('Corner   plotting skipped because this is a test run.')
         print('Test run finished.\n')

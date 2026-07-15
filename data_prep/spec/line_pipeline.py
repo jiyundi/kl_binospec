@@ -19,8 +19,8 @@ _spec_colors_map = ['orangered', 'cyan', 'gold']
 
 def process_single_line(specs, lineinfo, meta_raws, 
                         spec_width, spec_height, 
-                        clear_mode='simple', 
-                        clear_cont_strength=None, manual=True):
+                        clear_mode='simple', cont_y0s=None,
+                        cont_scales=None, manual=True):
     
     # 1. Rough cut: a 30 Angstrom window
     wave = np.mean(lineinfo.wav) * (1 + lineinfo.redshift)
@@ -154,25 +154,40 @@ def process_single_line(specs, lineinfo, meta_raws,
     # 6. Non-cutting processing 
     # 6.1) Extract continuum AND SUBSTRACT
     print('Continuums are being extracted and substracting data...')
+    
+    if cont_y0s is not None:
+        cont_y01, cont_y02, cont_y03 = cont_y0s
+    else:
+        cont_y01, cont_y02, cont_y03 = None, None, None
+    
+    if cont_scales is not None:
+        cont_scale1, cont_scale2, cont_scale3 = cont_scales
+    else:
+        cont_scale1, cont_scale2, cont_scale3 = 1, 1, 1
+    
+    verbose = False  # True, 
     contA = extract_2d_continuum(spec2dACB[0]['flux'], 
                                  spec2dACB[0]['mask'], 
-                                 # clear_cont_strength, 
+                                 cont_scale=cont_scale1, 
+                                 cont_y0=cont_y01,
                                  mode=clear_mode, 
-                                 verbose=True, 
+                                 verbose=verbose, 
                                  smooth=9)
     contC = extract_2d_continuum(spec2dACB[1]['flux'], 
                                  spec2dACB[1]['mask'], 
-                                 # clear_cont_strength, 
+                                 cont_scale=cont_scale2, 
+                                 cont_y0=cont_y02,
                                  mode=clear_mode, 
-                                 verbose=True, 
+                                 verbose=verbose, 
                                  smooth=9, 
                                  # cont_y0=len(spec2dACB[1]['flux'])//2-1
                                  )
     contB = extract_2d_continuum(spec2dACB[2]['flux'], 
                                  spec2dACB[2]['mask'],
-                                 # clear_cont_strength, 
+                                 cont_scale=cont_scale3, 
+                                 cont_y0=cont_y03,
                                  mode=clear_mode, 
-                                 verbose=True,
+                                 verbose=verbose,
                                  smooth=9, 
                                  # cont_y0=0
                                  )
@@ -181,19 +196,19 @@ def process_single_line(specs, lineinfo, meta_raws,
     fluxB = spec2dACB[2]['flux'] - contB
     
     # 6.2) Rescale: SPEC VAR - FINAL STEP OF SPECTRUM CUTTING
-    varA, mask_addedA = build_var(fluxA, spec2dACB[0]['mask'], option=1)
-    varC, mask_addedC = build_var(fluxC, spec2dACB[1]['mask'], option=1)
-    varB, mask_addedB = build_var(fluxB, spec2dACB[2]['mask'], option=1)
+    varA, mask_addedA = build_var(fluxA, spec2dACB[0]['mask'], option=2)
+    varC, mask_addedC = build_var(fluxC, spec2dACB[1]['mask'], option=2)
+    varB, mask_addedB = build_var(fluxB, spec2dACB[2]['mask'], option=2)
     
     # 6.3) Line profile solution by each set
     line_profile_A = find_line_sigma(
-        median_filter(fluxA, size=3), lineinfo.name, 'y0!=0'
+        median_filter(fluxA, size=3), lineinfo.name
         )
     line_profile_C = find_line_sigma(
-        median_filter(fluxC, size=3), lineinfo.name, 'y0!=0'
+        median_filter(fluxC, size=3), lineinfo.name
         )
     line_profile_B = find_line_sigma(
-        median_filter(fluxB, size=3), lineinfo.name, 'y0!=0'
+        median_filter(fluxB, size=3), lineinfo.name
         )
     
     # 7. Write meta spec info - linename, wave spec, ngrid...

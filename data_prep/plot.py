@@ -21,7 +21,14 @@ def solve_snr(data, var, data_type):
         return np.sum(data) / np.sqrt(np.sum(var))
 
     elif data_type == 'spec':
-        return np.sum(data) / np.sqrt(np.sum(var))
+        S = np.sum(data)
+        N = np.sqrt(np.sum(data + var))
+        
+        if S/N < 0:
+            print( "\033[43m" + 'WARNING:' + "\033[0m " + 
+                  f'Negative SNR found: {S/N:.0f}')
+        
+        return S/N
 
 
 def make_exam_plots(data_info, slit_name, how_cut=None, 

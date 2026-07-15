@@ -16,7 +16,9 @@ from data_prep.image.read_and_cutout import read_subaru_img_wcs, cutoutimg
 from data_prep.spec.read_and_cutout  import readinfodat
 from core.fitting_result_utils import complete_fit_params
 from core.plot_corner  import read_post
-from diagnostics.bad_g1g2_identifier import check_g1g2_post
+
+from summary.survey_not_overlaps import find_not_overlaps
+from summary.survey_bad_g1g2 import check_g1g2_post
 
 from klm.safe_plot import setup; setup() # must before plt
 plt.style.use('default')
@@ -32,6 +34,10 @@ def posterior_to_cat(g_cat, post_dir, ztable, slits_not_finished):
     """
         Generate a shear catalog.
     """
+    slitnums_, spec_idxs_, not_overlaps = find_not_overlaps(
+        pkl_folder='./scripts/binospec_pkl/'
+        )
+    
     for slit_num in range(1, 143):
         z_spec = ztable[slit_num, 1]
         
@@ -75,6 +81,16 @@ def posterior_to_cat(g_cat, post_dir, ztable, slits_not_finished):
             del log10_Mstar, log10_Mstar_err
             
             if slit_num in slits_not_finished:
+                
+                if slit_num in slitnums_: # spec in sky lines
+                    # assign blank params
+                    select_slit = (np.array(slitnums_) == slit_num)
+                    goods_or_bads = np.array(not_overlaps)[select_slit]
+                    major_specs_accepted = (np.sum(goods_or_bads) >= 0.5 * len(goods_or_bads))
+                    if not major_specs_accepted:
+                        g_cat[slit_num+1, 21] = 1e8
+                        print(f'Slit {slit_num:03d}: major specs are covered by sky lines.')
+                    
                 print( "\033[43m" + 'WARNING: ' + "\033[0m " + 
                       f'Slit {slit_num} skipped since you specified the fitting is not finished.\n')
                 continue
@@ -90,10 +106,9 @@ def posterior_to_cat(g_cat, post_dir, ztable, slits_not_finished):
             run_samples1, par_names1, weights1, \
             loglikes1, samples1, mask1, no_plot1 = read_post(
                 post_path1, percentile=95)
-            # par_names1 = run_samples1[0,  2:]
             samples1   = run_samples1[1:, 2:].astype(float)
             
-            # Posterior txt --> dict
+            # Check bad g1/g2, pass posterior txt --> dict
             alllinespecies = []
             for spec in data_info['spec']:
                 alllinespecies.append(spec['meta']['line_species'])
@@ -106,11 +121,24 @@ def posterior_to_cat(g_cat, post_dir, ztable, slits_not_finished):
                       f'Slit {slit_num} hint: your run does not match your current pkl or config yaml. Skipped.\n')
                 continue
             
+            # Check if specs are overlapped with any sky line masks
+            select_slit = (np.array(slitnums_) == slit_num)
+            goods_or_bads = np.array(not_overlaps)[select_slit]
+            major_specs_accepted = (np.sum(goods_or_bads) >= 0.5 * len(goods_or_bads))
+            if not major_specs_accepted:
+                print(f'Slit {slit_num:03d}: major specs are covered by sky lines.')
+                for key, _ in percentile.items():
+                    percentile[key]['err_hi'] *= 1e8
+                    percentile[key]['err_lo'] *= 1e8
+            
             # Add best params into percentile array
             with open(best_path1, "r") as f:
                 best_par = json.load(f)['maximum_likelihood']['point']
+            with open(best_path1, "r") as f:
+                peak_par = json.load(f)['posterior_mode'    ]['point']
             for key, vals in percentile.items():
                 percentile[key]['best'] = best_par[key]
+                percentile[key]['peak'] = peak_par[key]
             
             # Add more columns to contain posteriors
             n_rows, n_cols = g_cat.shape
@@ -123,9 +151,10 @@ def posterior_to_cat(g_cat, post_dir, ztable, slits_not_finished):
                             g_cat, 
                             np.array([
                                 [np.nan, f'{par}']+[np.nan]*(n_rows-2), # col 19
-                                [np.nan, f'{par}_median']+[np.nan]*(n_rows-2), # col 20
-                                [np.nan, f'{par}_err-']+[np.nan]*(n_rows-2), # col 21
-                                [np.nan, f'{par}_err+']+[np.nan]*(n_rows-2), # col 22
+                                [np.nan, f'{par}_peak'  ]+[np.nan]*(n_rows-2), # col 20
+                                [np.nan, f'{par}_median']+[np.nan]*(n_rows-2), # col 21
+                                [np.nan, f'{par}_err-']+[np.nan]*(n_rows-2), # col 22
+                                [np.nan, f'{par}_err+']+[np.nan]*(n_rows-2), # col 23
                                 ]).T, 
                             axis=1)
                 
@@ -134,8 +163,9 @@ def posterior_to_cat(g_cat, post_dir, ztable, slits_not_finished):
                 for j in range(len(g_cat[1])):
                     head_key = g_cat[1, j]
                     if par == head_key:
-                        g_cat[slit_num+1, j:j+4] = list([
+                        g_cat[slit_num+1, j:j+5] = list([
                             percentile[key]['best'], 
+                            percentile[key]['peak'], 
                             percentile[key]['median'], # or mean
                             percentile[key]['err_lo'], 
                             percentile[key]['err_hi'], 
@@ -284,34 +314,29 @@ def slit_design_plot(g_cat, maskCenterRA, maskCenterDEC, imgR, imgG, imgB, wcs,
     g_cat_return['g_cat_no_z'] = g_cat_no_z
     print(f'No secure z ({len(g_cat_no_z[2:, 0])}): {g_cat_no_z[2:, 0]}')
     
-    # (2) Slits with z but not yet solve posterior
-    g1_arr = np.array(g_cat_secure[2:, 19], dtype=float)
-    tbd    = np.isnan(g1_arr)
-    if slits_not_finished is not None:
-        tbd = np.isnan(g1_arr) | np.isin(g_cat_secure[2:, 0], np.array(slits_not_finished))
-    g_cat_solved = g_cat_secure[np.r_[True, True, ~tbd]]
-    g_cat_tbd    = g_cat_secure[np.r_[True, True,  tbd]]
-    g_cat_return['g_cat_tbd'] = g_cat_tbd
-    print(f'Not finished ({len(g_cat_tbd[2:, 0])}): {g_cat_tbd[2:, 0]}')
+    # (2) Slits with z BUT sky lines ON TOP
+    # bestfit = col 19
+    # peak    = col 20
+    # median  = col 21
+    # err- = col 22
+    # err+ = col 23
+    g1_errs = np.array(g_cat_secure[2:, 22], dtype=float)
+    g_cat_sky = g_cat_secure[np.r_[True, True,  (np.abs(g1_errs)>1e3)]]
+    g_cat_OK  = g_cat_secure[np.r_[True, True, ~(np.abs(g1_errs)>1e3)]]
+    g_cat_return['g_cat_fail'] = g_cat_sky
+    print(f'Sky lines ({len(g_cat_sky[2:, 0])}): {g_cat_sky[2:, 0]}')
     
-    # (3) Slits with z & posterior solved but not valid (FAILED)
-    g1_errs = np.array(g_cat_solved[2:, 20], dtype=float)
-    g_cat_fail  = g_cat_solved[np.r_[True, True,  np.isnan(g1_errs)]]
-    g_cat_valid = g_cat_solved[np.r_[True, True, ~np.isnan(g1_errs)]]
-    g_cat_return['g_cat_fail'] = g_cat_fail
-    print(f'Failed ({len(g_cat_fail[2:, 0])}): {g_cat_fail[2:, 0]}')
-    
-    # (4) Slits with z & posterior solved & valid but extreme g1/g2
-    g1err1 = np.array(g_cat_valid[2:, 21], dtype=float) # should be -
-    g1err2 = np.array(g_cat_valid[2:, 22], dtype=float) # should be +
-    g2err1 = np.array(g_cat_valid[2:, 25], dtype=float) # should be -
-    g2err2 = np.array(g_cat_valid[2:, 26], dtype=float) # should be +
+    # (5) Slits with z & posterior solved & valid & sky lines FREE but BAD g1/g2
+    g1err1 = np.array(g_cat_OK[2:, 22], dtype=float) # should be -
+    g1err2 = np.array(g_cat_OK[2:, 23], dtype=float) # should be +
+    g2err1 = np.array(g_cat_OK[2:, 27], dtype=float) # should be -
+    g2err2 = np.array(g_cat_OK[2:, 28], dtype=float) # should be +
     
     mask_good_g1 = (g1err1 < 0) & (g1err2 > 0)
     mask_good_g2 = (g2err1 < 0) & (g2err2 > 0)
     mask_good_g1g2  = mask_good_g1 & mask_good_g2
-    g_cat_good_g1g2 = g_cat_valid[np.r_[True, True,  mask_good_g1g2]]
-    g_cat_bad_g1g2  = g_cat_valid[np.r_[True, True, ~mask_good_g1g2]]
+    g_cat_good_g1g2 = g_cat_OK[np.r_[True, True,  mask_good_g1g2]]
+    g_cat_bad_g1g2  = g_cat_OK[np.r_[True, True, ~mask_good_g1g2]]
     g_cat_return['g_cat_good_g1g2'] = g_cat_good_g1g2
     g_cat_return['g_cat_bad_g1g2' ] = g_cat_bad_g1g2
     print(f'Bad g1g2 ({len(g_cat_bad_g1g2[2:, 0])}): {g_cat_bad_g1g2[2:, 0]}')
@@ -323,13 +348,13 @@ def slit_design_plot(g_cat, maskCenterRA, maskCenterDEC, imgR, imgG, imgB, wcs,
                 marker='x',
                 s=30, color='gray', 
                 transform=ax1.get_transform('world'), zorder=4)
-    if len(g_cat_tbd[2:, 15]) != 0:
-        ax1.scatter(g_cat_tbd[2:, 15], 
-                    g_cat_tbd[2:, 16], 
-                    label=f'Running on HPC ({len(g_cat_tbd[2:, 15])})', 
-                    marker='o',
-                    s=30, facecolors='gray', edgecolors='black', 
-                    transform=ax1.get_transform('world'), zorder=4)
+    ax1.scatter(g_cat_sky[2:, 15], 
+                g_cat_sky[2:, 16], 
+                label=r'Signals covered by sky lines '+
+                f'({len(g_cat_sky[2:, 15])})', 
+                marker='o',
+                s=20, facecolors='gray', edgecolors='purple', 
+                transform=ax1.get_transform('world'), zorder=4)
     ax1.scatter(g_cat_bad_g1g2[2:, 15], 
                 g_cat_bad_g1g2[2:, 16], 
                 label=r'$g_1$'+' or '+r'$g_2$'+' rejected '+
@@ -348,12 +373,12 @@ def slit_design_plot(g_cat, maskCenterRA, maskCenterDEC, imgR, imgG, imgB, wcs,
     # Annotate slits & Avoid overlapping
     texts = []
     # Not reliable fit
-    for x, y, slit_id in zip(g_cat_fail[2:, 15]-3/3600, #  x
-                             g_cat_fail[2:, 16]+3/3600, #  y
-                             g_cat_fail[2:,  0]): # slit ID
+    for x, y, slit_id in zip(g_cat_sky[2:, 15]-5/3600, #  x
+                             g_cat_sky[2:, 16]+5/3600, #  y
+                             g_cat_sky[2:,  0]): # slit ID
         texts.append(
-            ax1.text(x, y, str(slit_id), color='red', 
-                     transform=ax1.get_transform('world'), fontsize=8, zorder=3)
+            ax1.text(x, y, str(slit_id), color='purple', 
+                     transform=ax1.get_transform('world'), fontsize=4, zorder=3)
                      )
     # Extreme g1 or g2
     for x, y, slit_id in zip(g_cat_bad_g1g2[2:, 15]-3/3600, #  x
@@ -419,7 +444,7 @@ def slit_design_plot(g_cat, maskCenterRA, maskCenterDEC, imgR, imgG, imgB, wcs,
     ax1.minorticks_on()
     ax1.legend(prop={'size': 12}, facecolor='dimgray')
     ax1.set_aspect(1)
-    plt.savefig("slit_distribution.jpg", dpi=200, bbox_inches='tight')
+    plt.savefig("./summary/slit_distribution.jpg", dpi=200, bbox_inches='tight')
     
     return g_cat_return
 
@@ -429,9 +454,24 @@ def slit_design_plot(g_cat, maskCenterRA, maskCenterDEC, imgR, imgG, imgB, wcs,
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
     # If any, specify slits that were not finished
-    slits_not_finished = [15, 24, 45, 63, 109, 112, 116, 122, 129]
+    # slits_not_finished = []
+    # slits_not_finished = [15, 24, 45, 63, 109, 112, 116, 122, 129] # 20260601
+    slits_not_finished = [16, 45, 48, 58, 93, 122]
     
     # Redshifts
     z_table_filename = "./scripts/redshift_table.xlsx"
@@ -439,7 +479,6 @@ if __name__ == '__main__':
     array  = df.to_numpy()
     ztable = array[1:, 0:2] # remove 1st line header, keep 1 remaining
     ltable = array[1:, [0,6,9,12]]
-    # bltable = array[1:, [0,14]]
     
     # Add some columns
     g_cat = np.append(array, 
@@ -462,7 +501,7 @@ if __name__ == '__main__':
     
     # Save shear catalog
     from openpyxl import load_workbook
-    new_filename = "summary/redshift_table_with_shear_notedge_constrained.xlsx"
+    new_filename = f"summary/shear_table_{date_of_run}.xlsx"
     wb = load_workbook(z_table_filename)
     ws = wb.active # or, wb["Sheet1"]
     n_old_cols, n_rows = ws.max_column, ws.max_row

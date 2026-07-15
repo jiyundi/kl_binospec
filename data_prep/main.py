@@ -44,17 +44,21 @@ if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
     parser.add_argument('--slitID', default=7, type=int)
-    parser.add_argument('--spec_width',  default=30, type=int)
+    parser.add_argument('--spec_width',  default=40, type=int)
     parser.add_argument('--spec_height', default=20, type=int)
     parser.add_argument('--img_width',   default=20, type=int)
     parser.add_argument('--img_height',  default=20, type=int)
     parser.add_argument('--clear_mode',  default='simple', type=str)
+    parser.add_argument('--cont_scale',  default=[1.], type=int, nargs='+')
+    parser.add_argument('--cont_y0s',    default=[10], type=int, nargs='+')
     slit_num    = parser.parse_args().slitID
     spec_width  = parser.parse_args().spec_width
     spec_height = parser.parse_args().spec_height
     img_width   = parser.parse_args().img_width
     img_height  = parser.parse_args().img_height
     clear_mode  = parser.parse_args().clear_mode
+    cont_scale  = parser.parse_args().cont_scale
+    cont_y0ss   = parser.parse_args().cont_y0s
     
     # 1. FOLDER NAMES AND FILENAMES
     img_dir = '../../../RSCH3/HSC_img_A383/'
@@ -223,9 +227,9 @@ if __name__ == '__main__':
     raw_specs = SpecSet(specA=spec_A, specC=spec_C, specB=spec_B)
     
     # 7.4) cut out by each line
-    specs_data_info, redo_zs = [], []
+    specs_data_info, redo_zs, line_i = [], [], 0
     for linename, this_emis_wave in emilines.items():
-        print(f'\nCutting for emission line: {linename}...')
+        print(f'\nCutting for emission line {line_i+1}: {linename}...')
         
         # 7.4.1) fill info in dataclass
         @dataclass
@@ -238,10 +242,27 @@ if __name__ == '__main__':
         )
         
         # 7.4.2) core function of cutting
+        if cont_y0ss is not None:
+            if len(cont_y0ss) > 1:
+                cont_y0s = [ cont_y0ss[3*line_i    ], 
+                             cont_y0ss[3*line_i + 1], 
+                             cont_y0ss[3*line_i + 2] ]
+            else:
+                cont_y0s = None
+        
+        if len(cont_scale) > 1:
+            cont_scales = [cont_scale[3*line_i    ], 
+                           cont_scale[3*line_i + 1], 
+                           cont_scale[3*line_i + 2] ]
+        else:
+            cont_scales = None
+        
         data_this_line, line_info_updated = process_single_line(
             raw_specs, line_info, meta_spec_raws, 
             spec_width, spec_height, 
             clear_mode, 
+            cont_scales=cont_scales, 
+            cont_y0s=cont_y0s, 
             #manual=False
         )
         
@@ -250,6 +271,8 @@ if __name__ == '__main__':
         for data in data_this_line:
             specs_data_info.append(data)
         print(f'Cutting for emission line: {linename} finished. OK.')
+        
+        line_i += 1
     
     # -------------------------------------------------------------
     # 8. FINALLY UPDATE z and M* IN META GALAXY

@@ -38,13 +38,13 @@ class EmissionProcessor:
             else:
                 mean1 = params[1] if line != "O2" else params[2]
             
-            if line=='O2':
-                print(f'1D fit {i}: index (horiz, verti) = '+
-                      f'({mean1-fitter.delta_pix/2:.1f}|{mean1+fitter.delta_pix/2:.1f}, '+
-                      f'{row:.1f})')
-            else:
-                print(f'1D fit {i}: index (horiz, verti) = ({mean1:.1f}, '+
-                      f'{row:.1f})')
+            # if line=='O2':
+            #     print(f'1D fit {i}: index (horiz, verti) = '+
+            #           f'({mean1-fitter.delta_pix/2:.1f}|{mean1+fitter.delta_pix/2:.1f}, '+
+            #           f'{row:.1f})')
+            # else:
+            #     print(f'1D fit {i}: index (horiz, verti) = ({mean1:.1f}, '+
+            #           f'{row:.1f})')
 
             # Step 1.2 - 2D Gaussian 深度拟合中心
             if idx_xs[0] is not None:
@@ -81,12 +81,12 @@ class EmissionProcessor:
                 
             d2g_params[f'Set{i}'] = ps
             
-            if line=='O2':
-                print(f'2D fit {i}: index (horiz, verti) = ({x1:.1f}|{x2:.1f}, '+
-                      f'{y0:.1f})')
-            else:
-                print(f'2D fit {i}: index (horiz, verti) = ({x1:.1f}, '+
-                      f'{y0:.1f})')
+            # if line=='O2':
+            #     print(f'2D fit {i}: index (horiz, verti) = ({x1:.1f}|{x2:.1f}, '+
+            #           f'{y0:.1f})')
+            # else:
+            #     print(f'2D fit {i}: index (horiz, verti) = ({x1:.1f}, '+
+            #           f'{y0:.1f})')
             
         # Step 2 - 裁剪
         cropper = SpectrumCropper(specs)

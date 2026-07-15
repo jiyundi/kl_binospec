@@ -6,29 +6,28 @@ from scipy.interpolate import UnivariateSpline
 
 
 def extract_2d_continuum(flux, mask, 
-                         cont_y0=None, mode='simple', 
-                         smooth=2, verbose=False):
+                         cont_y0=None, mode='simple', cont_scale=1, 
+                         smooth=3, verbose=False):
     arr_flux = np.where(mask, flux, np.nan)
     ny, nx = arr_flux.shape # slit, wavelength
+    margin = 8
     
-    # if strength is None:
-    #     empirical_factor = np.max([
-    #         1.0, 
-    #         np.nanmedian(arr_flux[arr_flux < 5 * np.nanstd(arr_flux)])
-    #         ])
-    #     print(f'[INFO] continuum: Empirical factor = {empirical_factor:.2f}')
-    # elif strength == 0:
-    #     return np.zeros(arr_flux.shape)
-    # else:
-    #     empirical_factor = strength
-        
+    if cont_y0 is not None:
+        mode = 'manual'
+    
     if mode=='simple':
-        flx = median_filter(arr_flux, size=3)
+        flx = median_filter(arr_flux * cont_scale, size=smooth)
         spatial_profi = np.nanmean(
-            np.concatenate((flx[:, :5], flx[:, -5:]), axis=1), 
+            np.concatenate((flx[:, :margin], flx[:, -margin:]), axis=1), 
             axis=1)
-        spatial_profi = gaussian_filter1d(spatial_profi, sigma=1)
-        spatial_profi = np.where(spatial_profi>0, spatial_profi, 0)
+        
+        if np.any(np.isnan(spatial_profi)):
+            print("\033[43m" + 'WARNING:' + "\033[0m " + 
+                  f'Continuum extraction band may be too small (left/right {margin} px) to fail.')
+        
+        spatial_profi = gaussian_filter1d(spatial_profi, sigma=2)
+        spatial_profi -= np.min(spatial_profi)
+        # spatial_profi = np.where(spatial_profi>0, spatial_profi, 0)
         model = np.ones(flux.shape) * spatial_profi[:,np.newaxis]
         
     elif mode=='no':
@@ -57,25 +56,45 @@ def extract_2d_continuum(flux, mask,
         #     P[y,:] = gaussian_filter1d(P[y,:], smooth)
         
         # build 2D continuum model
-        model = P * cont[:,np.newaxis].T
+        model = P * cont[:,np.newaxis].T * cont_scale
             
+    vmin, vmax = np.nanmin(arr_flux), np.nanmax(arr_flux)
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(1, 4, figsize=(9,3))
+    im0 = ax[0].imshow(arr_flux, aspect='auto', cmap='viridis', origin='lower')
+    im1 = ax[1].imshow(model,    aspect='auto', cmap='viridis', origin='lower')
+    temp_mask = np.ones(model.shape, dtype=bool)
+    temp_mask[5:-5] = False
+    im2 = ax[2].imshow(np.where(temp_mask, arr_flux-model, np.nan), 
+                       aspect='auto', cmap='viridis', origin='lower',
+                       )
+    im3 = ax[3].imshow(arr_flux-model, 
+                       aspect='auto', cmap='viridis', origin='lower',
+                       vmin=vmin, vmax=vmax
+                       )
+    plt.colorbar(im0, ax=ax[0])
+    plt.colorbar(im1, ax=ax[1])
+    plt.colorbar(im2, ax=ax[2])
+    plt.colorbar(im3, ax=ax[3])
+    ax[0].set_title('Data')
+    ax[1].set_title(f'Continuum (mode: {mode})')
+    ax[2].set_title('Data - Continuum')
+    ax[3].set_title('Data - Continuum')
+    # print(f'Continuum.py: Top 5 rows sum: {np.nansum(arr_flux[-5:]-model[-5:]):.1f}')
+    # print(f'Continuum.py: Btm 5 rows sum: {np.nansum(arr_flux[ :5]-model[ :5]):.1f}')
     if verbose:
-        vmin, vmax = np.nanmin(arr_flux), np.nanmax(arr_flux)
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(1, 3, figsize=(8,3))
-        im0 = ax[0].imshow(arr_flux, aspect='auto', cmap='viridis', origin='lower')
-        im1 = ax[1].imshow(model,    aspect='auto', cmap='viridis', origin='lower')
-        im2 = ax[2].imshow(arr_flux-model, aspect='auto', cmap='viridis', origin='lower',
-                           vmin=vmin, vmax=vmax)
-        plt.colorbar(im0, ax=ax[0])
-        plt.colorbar(im1, ax=ax[1])
-        plt.colorbar(im2, ax=ax[2])
-        ax[0].set_title('Data')
-        ax[1].set_title(f'Continuum (mode: {mode})')
-        ax[2].set_title('Data - Continuum')
         plt.suptitle("Close window to continue...", fontsize=15, y=0.98)
         plt.tight_layout()
-        # plt.subplots_adjust(top=0.98) # main title spacing
+        plt.show()
+        plt.close()
+    else:
+        plt.suptitle("Window will close automatically in 3 seconds...", fontsize=15, y=0.98)
+        plt.tight_layout()
+        
+        timer = fig.canvas.new_timer(interval=3000) 
+        timer.add_callback(plt.close, fig)
+        timer.start()
+        
         plt.show()
         plt.close()
 
@@ -142,66 +161,61 @@ def estimate_sigma_from_data(img, mask_lines=None):
     return sigma
 
 
-# def horne_extract(img, var, trace_y, aperture=6):
-
-#     ny, nx = img.shape
-#     flux = np.zeros(nx)
-#     err  = np.zeros(nx)
-
-#     ygrid = np.arange(ny)
-
-#     for x in range(nx):
-
-#         yc = trace_y[x]
-
-#         # aperture mask
-#         m = np.abs(ygrid - yc) <= aperture
-
-#         y = ygrid[m]
-#         d = img[m, x]
-#         v = var[m, x]
-
-#         # ----------------------------------------
-#         # profile P(y): Gaussian estimate
-#         # ----------------------------------------
-#         sigma = aperture / 2.0
-#         P = np.exp(-(y - yc)**2 / (2*sigma**2))
-#         P /= P.sum()
-
-#         # bad pixels
-#         good = (v > 0) & np.isfinite(v)
-
-#         if good.sum() < 3:
-#             flux[x] = np.nan
-#             err[x]  = np.nan
-#             continue
-
-#         Pg = P[good]
-#         dg = d[good]
-#         vg = v[good]
-
-#         # ----------------------------------------
-#         # Horne 1986 optimal extraction
-#         # ----------------------------------------
-#         num = np.sum(Pg * dg / vg)
-#         den = np.sum(Pg**2 / vg)
-
-#         if den <= 0:
-#             flux[x] = np.nan
-#             err[x]  = np.nan
-#         else:
-#             flux[x] = num / den
-#             err[x]  = np.sqrt(1.0 / den)
-
-#     return flux, err
-
-
-# if __name__ == '__main__':
-#     for slit_num in [7]:#, 8, 29, 35, 55, 56, 57]:
-#         data_info  = another_load_mock(pkl_folder='../../scripts_stable/binospec_pkl/', 
-#                                        slit_num=slit_num)
+if __name__ == '__main__':
+    
+    import joblib
+    def another_load_mock(pkl_folder='mock/', slit_num=95):
+        with open(f'{pkl_folder}pkl/slit_{slit_num:03d}.pkl', "rb") as f:
+            data_info = joblib.load(f)
+        return data_info
+    
+    def get_Fabian_snr(flux, mask, var=None, verbose=False):
+        left, right = flux.shape[1]//4, flux.shape[1] - flux.shape[1]//4
+        up,   down  = flux.shape[0]//4, flux.shape[0] - flux.shape[0]//4
         
-#         for spec_idx in range(len(data_info['spec'])):
-#             single_spec_data = data_info['spec'][spec_idx]
-#             new_spec_data = build_2d_continuum(single_spec_data, smooth=9)
-
+        mask_var = np.ones(flux.shape, dtype=bool)
+        mask_var[up:down, left:right] = False
+        
+        if np.sum(mask_var & mask) <= 4:
+            print( "\033[43m" + 'WARNING:' + "\033[0m " + 'SNR & sky mask skipped all pixels. Gauss background noise may be not robust.')
+            gaussian_background_noise = np.nanstd(flux[mask_var       ])
+        else:
+            gaussian_background_noise = np.nanstd(flux[mask_var & mask])
+        
+        del var
+        var = np.ones(flux.shape) * gaussian_background_noise**2
+        
+        S = np.sum(flux[mask])
+        N = np.sqrt(np.sum(flux[mask] + var[mask]))
+        
+        if S/N < 0:
+            print( "\033[43m" + 'WARNING:' + "\033[0m " + 
+                  f'Negative SNR found: {S/N:.0f}')
+        
+        return S/N
+    
+    for slit_num in range(14, 143):
+        try:
+            data_info = another_load_mock(
+                pkl_folder='../../scripts/binospec_pkl/', 
+                slit_num=slit_num)
+            
+        except FileNotFoundError:
+            print( "\033[43m" + 'WARNING:' + "\033[0m " + 
+                  f'Slit {slit_num} skipped because no PKL found.')
+            continue
+        
+        for spec_idx in range(len(data_info['spec'])):
+            
+            cont = extract_2d_continuum(
+                data_info['spec'][spec_idx]['data'], 
+                data_info['spec'][spec_idx]['mask'], 
+                mode='simple', 
+                verbose=True
+                )
+            
+            SNR = get_Fabian_snr(data_info['spec'][spec_idx]['data'] - cont, 
+                                 data_info['spec'][spec_idx]['mask'])
+            print(f'SNR: {SNR:.0f}')
+            
+        print('----------------------------------------')

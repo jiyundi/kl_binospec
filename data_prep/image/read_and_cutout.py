@@ -1,7 +1,10 @@
 import numpy as np
 from   astropy.io  import fits
 from   astropy.wcs import WCS
-
+import warnings
+from   astropy import log
+from   astropy.wcs import FITSFixedWarning
+from   astropy.io.fits.verify import VerifyWarning
 
 def read_subaru_img_wcs(image_science_filename, 
                         image_weights_filename=None):
@@ -13,29 +16,54 @@ def read_subaru_img_wcs(image_science_filename,
     ----------
     {science_data, science_wcs, weights_data, weights_wcs}
     """
-    science_hdul = fits.open(image_science_filename)
+    # Clear warnings
+    with warnings.catch_warnings():
+        
+        # Clear warnings
+        warnings.simplefilter("ignore", VerifyWarning)
+        warnings.simplefilter("ignore", FITSFixedWarning)
+        old_level = log.level
+        log.setLevel("ERROR")
     
-    # Pixel data
-    science_raw = science_hdul[0].data
+        science_hdul = fits.open(image_science_filename)
+        
+        # Pixel data
+        science_raw = science_hdul[0].data
+        
+        # WCS mapping
+        science_wcs = WCS(image_science_filename)
+        
+        # Clear warnings
+        log.setLevel(old_level)
+        
+        # Gain value
+        science_hdr0_raw = science_hdul[0].header
+        sci_GAIN = science_hdr0_raw['GAIN']
+        
+        # Unit conversion
+        # Science [e/s]  =  science_raw [ADU/s]  *  sci_GAIN [e/ADU]
+        science_data = science_raw * sci_GAIN # e/s
     
-    # WCS mapping
-    science_wcs = WCS(image_science_filename)
-    science_hdr0_raw = science_hdul[0].header
-    sci_GAIN = science_hdr0_raw['GAIN']
-    
-    # Unit conversion
-    # Science = science_raw (ADU/s)     * sci_GAIN    (e/ADU)
-    # Weights = weights_raw (s^2/ADU^2) * wei_GAIN^-2 (e/ADU)^-2
-    science_data = science_raw * sci_GAIN
-    
-    weights_data, weights_wcs = None, None
-    if image_weights_filename is not None: 
-        weights_hdul = fits.open(image_weights_filename)
-        weights_raw  = weights_hdul[0].data
-        weights_wcs  = WCS(image_weights_filename)
-        weights_hdr0_raw = weights_hdul[0].header
-        wei_GAIN     = weights_hdr0_raw['GAIN']
-        weights_data = weights_raw * wei_GAIN**(-2)
+        weights_data, weights_wcs = None, None
+        if image_weights_filename is not None: 
+            weights_hdul = fits.open(image_weights_filename)
+            
+            # Pixel data
+            weights_raw  = weights_hdul[0].data
+            
+            # WCS mapping
+            weights_wcs  = WCS(science_hdul[0].header)
+            
+            # Gain value
+            weights_hdr0_raw = weights_hdul[0].header
+            wei_GAIN     = weights_hdr0_raw['GAIN']
+            
+            # Unit conversion
+            # Weights [(s/e)^2]  =  weights_raw [(s/ADU)^2]  *  wei_GAIN^-2 [(e/ADU)^-2]
+            weights_data = weights_raw * wei_GAIN**(-2) # [e/s]^(-2)
+            
+            # Clear warnings
+            log.setLevel(old_level)
     
     return {'science_data': science_data, 
             'science_wcs':  science_wcs, 

@@ -24,6 +24,7 @@ kwds_list = [
     {'slit_num':75, 'mask_x0':25, 'mask_y0':12, 'dx':8, 'dy':9},
     {'slit_num':91, 'mask_x0':4.5, 'mask_y0':5, 'dx':1.5, 'dy':1.5},
     {'slit_num':99, 'mask_x0':15, 'mask_y0':2, 'dx':3, 'dy':3},
+    {'slit_num':113, 'mask_x0':-2, 'mask_y0':-2, 'dx':10, 'dy':10},
     {'slit_num':128, 'mask_x0':[10,22], 'mask_y0':[0,13], 'dx':[5,3], 'dy':[2,4]},
     {'slit_num':132, 'mask_x0':[4,12,21], 'mask_y0':[0,18,16], 'dx':[3,2,2], 'dy':[3,2,2]},
     {'slit_num':133, 'mask_x0':5, 'mask_y0':20, 'dx':5, 'dy':4},
@@ -77,8 +78,8 @@ def mask_neighbor_star(image_data, image_mask,
     gs = fig.add_gridspec(nrows=1, ncols=2)
     ax1 = fig.add_subplot(gs[0, 0])
     ax2 = fig.add_subplot(gs[0, 1])
-    ax1.imshow(np.where(image_mask, image_data, np.nan))
-    ax2.imshow(np.where(final_mask, image_data, np.nan))
+    ax1.imshow(np.where(image_mask, image_data, np.nan), origin='lower')
+    ax2.imshow(np.where(final_mask, image_data, np.nan), origin='lower')
     ax1.set_title('Before masking')
     ax2.set_title('After masking')
     plt.show()

@@ -74,7 +74,8 @@ if __name__ == '__main__':
     fits_nameA = 'sci_img_2023.1023.091355.fits'
     fits_nameB = 'sci_img_2023.1019.082429.fits'
     
-    set_dir, fits_name = set_B_dir, fits_nameB
+    set_dir, fits_name = set_A_dir, fits_nameA
+    # set_dir, fits_name = set_B_dir, fits_nameB
     
     science_hdul = fits.open(spec_CCD_root_dir + set_dir + fits_name)
     

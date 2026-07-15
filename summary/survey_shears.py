@@ -49,7 +49,7 @@ def shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcs,
         _draw_shear_column(fig, gs, col=1, kind='gx', **common_kwargs)
         
         if savefig:
-            plt.savefig("gt_gx_distribution.jpg", dpi=300, bbox_inches='tight')
+            plt.savefig("summary/gt_gx_distribution_copy.jpg", dpi=300, bbox_inches='tight')
         
         return fig
     
@@ -110,7 +110,7 @@ def _draw_shear_column(fig, gs, col, kind,
         ax3 = fig.add_subplot(gs[2, col])
     
     # ax2_ymin, ax2_ymax = ax2.get_ylim()
-    ax2_ymin, ax2_ymax = -0.30, 0.42
+    ax2_ymin, ax2_ymax = -0.30, 0.43
     ax2_xmin, ax2_xmax =     0, 16.5
     
     # Umetsu+14 CLASH (A383) WL profile - degitized
@@ -144,10 +144,10 @@ def _draw_shear_column(fig, gs, col, kind,
                                   0.044, 0.017, -0.010, 0.015, 0.022])
         ax2.fill_between(x=U14_Rs, 
                          y1=U14_gts_CL_hi, y2=U14_gts_CL_lo, 
-                         color='mistyrose', alpha=0.5, zorder=0.5)
+                         color='mistyrose', alpha=0.75, zorder=0.1)
         ax3.fill_between(x=U14_Rs, 
                          y1=U14_gts_CL_hi, y2=U14_gts_CL_lo, 
-                         color='mistyrose', alpha=0.5, zorder=0.5)
+                         color='mistyrose', alpha=0.75, zorder=0.1)
         ax2.errorbar(U14_Rs, U14_gts, 
                      yerr=[U14_gts_hi - U14_gts, 
                            U14_gts    - U14_gts_lo ], 
@@ -158,7 +158,7 @@ def _draw_shear_column(fig, gs, col, kind,
                      markerfacecolor=(0.5, 3/8, 3/8), 
                      markeredgecolor=(0.5, 3/8, 3/8), 
                      color=(0.5, 3/8, 3/8), lw=1, linestyle=':', 
-                     label=r'$g_+$: Umetsu+14 (A383)', 
+                     label=r'$g_+$: Umetsu+14 (A383, $\langle \beta \rangle =$'+f'{U14_beta_avg}'+')', 
                      zorder=1.5)
         ax3.errorbar(U14_Rs, U14_gts, 
                      yerr=[U14_gts_hi - U14_gts, 
@@ -170,15 +170,19 @@ def _draw_shear_column(fig, gs, col, kind,
                      markerfacecolor=(0.5, 3/8, 3/8), 
                      markeredgecolor=(0.5, 3/8, 3/8), 
                      color=(0.5, 3/8, 3/8), lw=1, linestyle=':', 
-                     label=r'$g_+$: Umetsu+14 (A383)', 
+                     label=r'$g_+$: Umetsu+14 (A383, $\langle \beta \rangle =$'+f'{U14_beta_avg}'+')', 
                      zorder=1.5)
         for U14_R, U14_gt_lo, U14_N_bkg in \
             zip(U14_Rs, U14_gts_lo, U14_N_bkg_each_bin):
-            # ax2.text(U14_R, U14_gt_lo, f'{int(round(U14_N_bkg, 0))}', 
-            #          color=(0.5, 3/8, 3/8), fontsize=8, zorder=4, va='center')
             ax3.text(U14_R, U14_gt_lo-0.01, f'({int(round(U14_N_bkg, 0))})', 
                      color=(0.5, 3/8, 3/8), fontsize=6, va='top', ha='center',
-                     zorder=4)
+                     bbox=dict(
+                        facecolor="white",  # Background color
+                        edgecolor="none",       # Border color
+                        alpha=0.9,              # Transparency (0 to 1)
+                        boxstyle="round,pad=0.0" # Rounded corners with padding
+                    ), 
+                    zorder=0.5)
     
     # Pranjal+24 results (A2261) -- only overplotted on the tangential (gt) panel
     if (kind == 'gt') or (share_axs is not None):
@@ -201,28 +205,29 @@ def _draw_shear_column(fig, gs, col, kind,
         
         for N_, R_, Gt_, Gte_, Fac_ \
             in zip(P24_names, P24_Rs, P24_gts, P24_gterrs, P24_facs):
-            # ax2.text(1/8+ R_, Gt_ * Fac_, N_, 
-            #          color='magenta', fontsize=8, zorder=4, va='center')
-            ax3.text(1/8+ R_, Gt_ * Fac_, N_, 
-                     color='magenta', fontsize=8, zorder=4, va='center')
+            ax2.text(R_, (Gt_ + Gte_) * Fac_ + 0.01, N_, 
+                     color='magenta', fontsize=8, zorder=4, ha='center')
             if share_axs is None:
-                ax2.errorbar( R_, Gt_ * Fac_, yerr=Gte_, 
+                ax2.errorbar( R_, Gt_ * Fac_, yerr=Gte_ * Fac_, 
                              capsize=4, marker='^', markersize=1, 
                              color='magenta', zorder=0.75)
                 ax3.errorbar( R_, Gt_ * Fac_, yerr=Gte_ * Fac_, 
                              capsize=4, marker='^', markersize=1, 
                              color='magenta', zorder=0.75)
+                
         if share_axs is None:
-            ax2.scatter(P24_Rs, P24_gts * Fac_, 
+            ax2.scatter(P24_Rs, P24_gts * P24_facs, 
                         marker='^', s=20, color='magenta', 
-                        label=r'$g_+$: Pranjal+24 (A2261)', zorder=0.75)
-            ax3.scatter(P24_Rs, P24_gts * Fac_, 
+                        label=r'$g_+$: Pranjal+24 (A2261, rescaled to $\beta =$'+f'{U14_beta_avg}'+')', 
+                        zorder=0.75)
+            ax3.scatter(P24_Rs, P24_gts * P24_facs, 
                         marker='^', s=20, color='magenta', 
-                        label=r'$g_+$: Pranjal+24 (A2261)', zorder=0.75)
+                        label=r'$g_+$: Pranjal+24 (A2261, $\rightarrow \beta =$'+f'{U14_beta_avg}'+')', 
+                        zorder=0.75)
         
     # In this work...
     d_L  = proper_a_d_distance_calc(0.1883, 70, 0.3)
-    Rs, betas, gts, gt_errs, gxs, gx_errs = [], [], [], [], [], []
+    Rs, betas, facs, gts, gt_errs, gxs, gx_errs = [], [], [], [], [], [], []
     for i in range(1, len(arr_shears)):
         slitID, z, RA, DEC, R, theta_rad, \
             g1, g1_err, g2, g2_err, \
@@ -276,7 +281,7 @@ def _draw_shear_column(fig, gs, col, kind,
         beta = d_LS / d_S
         fac  = U14_beta_avg / beta
         
-        Rs.append(R); betas.append(beta)
+        Rs.append(R); betas.append(beta); facs.append(fac)
         gts.append(gt * fac); gt_errs.append(gt_err * fac)
         gxs.append(gx * fac); gx_errs.append(gx_err * fac)
         
@@ -286,9 +291,13 @@ def _draw_shear_column(fig, gs, col, kind,
         ax2.text(R+1/8, y_val, int(slitID), 
                  color='black', fontsize=8, va='center', zorder=5)
     
-    y_vals = gts    if kind == 'gt' else gxs
-    y_errs = gt_err if kind == 'gt' else gx_err
-    marker = '^'    if kind == 'gt' else 'o'
+    print(f'[INFO] Shears {kind} have been rescaled by factors of: \n'+
+          f'{[round(fac, 2) for fac in facs]} \nfor Slits \n'+
+          f'{[int(s) for s in arr_shears[1:, 0].astype(float)]}')
+    
+    y_vals = gts     if kind == 'gt' else gxs
+    y_errs = gt_errs if kind == 'gt' else gx_errs
+    marker = '^'     if kind == 'gt' else 'o'
     ax2.errorbar(Rs, y_vals, yerr=y_errs, 
                  fmt=' ', capsize=4, capthick=1, elinewidth=1, 
                  ecolor=main_color, marker=marker, markersize=4, 
@@ -301,7 +310,7 @@ def _draw_shear_column(fig, gs, col, kind,
     ax2.scatter(Rs, y_vals_all, 
                 marker=marker, s=16, 
                 facecolors='white', edgecolors=main_color, zorder=2, 
-                label=ylabel_full+': Binospec (A383)')
+                label=ylabel_full+r': Binospec (A383, $\beta =$'+f'{U14_beta_avg}'+')')
     
     # Error information
     if share_axs is not None:
@@ -309,18 +318,18 @@ def _draw_shear_column(fig, gs, col, kind,
                  r'Arithmetic error $\sigma_{\langle g_+ \rangle}$ = '+f'{np.mean(np.array(gt_errs)):.3f}\n'+
                  r'Arithmetic $\langle g_\times \rangle$ = '+f'{np.mean(np.array(gxs)):.3f}'+
                  r' $\pm$ '+f'{np.mean(np.array(gx_errs)):.3f}',
-                 fontsize=8, color='black', ha='left', va='bottom', 
+                 fontsize=7, color='black', ha='left', va='bottom', 
                  transform=ax2.transAxes)
     elif kind == 'gt':
         ax2.text(0.01, 0.01, 
                  f'Arithmetic error = {np.mean(np.array(gt_errs)):.3f}', 
-                 fontsize=9, color=main_color, ha='left', va='bottom', 
+                 fontsize=7, color=main_color, ha='left', va='bottom', 
                  transform=ax2.transAxes)
     elif kind == 'gx':
         ax2.text(0.01, 0.01, 
                  f'Arithmetic offset = {np.mean(np.array(gxs)):.3f}   \n'+
                  f'Arithmetic error = { np.mean(np.array(gx_errs)):.3f}', 
-                 fontsize=9, color=main_color, ha='left', va='bottom', 
+                 fontsize=7, color=main_color, ha='left', va='bottom', 
                  transform=ax2.transAxes)
     
     # initial binned dict
@@ -339,8 +348,9 @@ def _draw_shear_column(fig, gs, col, kind,
     # calculate binned average
     binned_R_lows, binned_Nslits, binned_yvals, binned_yerrs = [], [], [], []
     binned_gts, binned_gterrs, binned_gxs, binned_gxerrs = [], [], [], []
-    for r_low in sorted(np.array(list(groups.keys())).astype(int)):
-        vals_and_errs = groups[f'{int(r_low)}']
+    sorted_keys = sorted(groups.keys(), key=lambda x: float(x))
+    for r_low in sorted_keys:
+        vals_and_errs = groups[r_low]
         gts    = np.array([v[0] for v in vals_and_errs])
         gterrs = np.array([v[1] for v in vals_and_errs])
         gxs    = np.array([v[2] for v in vals_and_errs])
@@ -374,7 +384,7 @@ def _draw_shear_column(fig, gs, col, kind,
                 np.array(binned_yvals), 
                 marker=marker, s=16, 
                 facecolors='white', edgecolors=main_color, zorder=2, 
-                label=ylabel_full+f': Binospec (A383), bin size = {binsize}\'')
+                label=ylabel_full+r': Binospec (A383, $\rightarrow \beta =$'+f'{U14_beta_avg}'+f'), bin size = {binsize}\'')
     
     for i in range(len(binned_R_lows)):
         if share_axs is None:
@@ -395,28 +405,38 @@ def _draw_shear_column(fig, gs, col, kind,
                      fontsize=8, color='mediumblue', ha='center', va='top', 
                      zorder=4)
     
+    # Binned regions (e.g. 0--2, 2--4, 4--6, ...)
+    R_low_max = np.max([binned_R_lows[i] for i in range(len(binned_R_lows))])
+    for r_low in np.arange(0, R_low_max+2*binsize, 2*binsize):
+        ax2.fill_between([r_low, r_low + binsize], 
+                         ax2_ymin, ax2_ymax, 
+                         color='gray', alpha=0.04)
+        ax3.fill_between([r_low, r_low + binsize], 
+                         ax2_ymin, ax2_ymax, 
+                         color='gray', alpha=0.04)
+    
     # Error information (binned)
     if share_axs is not None:
         weighted_binned = np.average(np.array(binned_gxs), weights=np.array(binned_gxerrs)**(-2))
         weighted_binned_err = (np.sum(np.array(binned_gxerrs)**(-2)))**(-0.5)
         ax3.text(0.01, 0.01, 
-                 r'Arithmetic error $\sigma_{\langle g_+ \rangle}$ = '+f'{np.mean(np.array(binned_gterrs)):.3f}\n'+
+                 r'Arithmetic error $\sigma_{\langle g_+ \rangle}$ = '+f'{np.mean(np.array(binned_gterrs)):.3f} (binned)\n'+
                  r'Arithmetic $\langle g_\times \rangle$ = '+f'{np.mean(np.array(binned_gxs)):.3f}'+
-                 r' $\pm$ '+f'{np.mean(np.array(binned_gxerrs)):.3f}\n'+
+                 r' $\pm$ '+f'{np.mean(np.array(binned_gxerrs)):.3f} (binned)\n'+
                  r'Weighted $\langle g_\times \rangle$ = '+f'{weighted_binned:.3f}'+
-                 r' $\pm$ '+f'{weighted_binned_err:.3f}',
-                 fontsize=8, color='black', ha='left', va='bottom', 
+                 r' $\pm$ '+f'{weighted_binned_err:.3f} (binned)',
+                 fontsize=7, color='black', ha='left', va='bottom', 
                  transform=ax3.transAxes)
     elif kind == 'gt':
         ax3.text(0.01, 0.01, 
-                 f'Arithmetic error = {np.mean(np.array(binned_yerrs)):.3f}', 
-                 fontsize=8, color=main_color, ha='left', va='bottom', 
+                 f'Arithmetic error = {np.mean(np.array(binned_yerrs)):.3f} (binned)', 
+                 fontsize=7, color=main_color, ha='left', va='bottom', 
                  transform=ax3.transAxes)
     elif kind == 'gx':
         ax3.text(0.01, 0.01, 
-                 f'Arithmetic offset = {np.mean(np.array(binned_yvals)):.3f}   \n'+
-                 f'Arithmetic error = { np.mean(np.array(binned_yerrs)):.3f}', 
-                 fontsize=8, color=main_color, ha='left', va='bottom', 
+                 f'Arithmetic offset = {np.mean(np.array(binned_yvals)):.3f} (binned)\n'+
+                 f'Arithmetic error = { np.mean(np.array(binned_yerrs)):.3f} (binned)', 
+                 fontsize=7, color=main_color, ha='left', va='bottom', 
                  transform=ax3.transAxes)
     
     # R_500, R_200(=R_500/0.65)
@@ -425,12 +445,13 @@ def _draw_shear_column(fig, gs, col, kind,
     r_500 = R_500 / d_A
     r_200 = r_500 / 0.65
     c500, c200 = draw_r500_r200(plt, ax1, r_500, r_200, color='limegreen')
-    
     for ax in (ax2, ax3):
         ax.text(r_500/60+1/8, ax2_ymin+1/50, r'$r_{500,\mathrm{ A383}}$', color='limegreen', fontsize=12, zorder=5)
         ax.text(r_200/60+1/8, ax2_ymin+1/50, r'$r_{200,\mathrm{ A383}}$', color='limegreen', fontsize=12, zorder=5)
-        ax.vlines(r_500/60, ymin=ax2_ymin, ymax=ax2_ymax, ls='--', color='limegreen')
-        ax.vlines(r_200/60, ymin=ax2_ymin, ymax=ax2_ymax, ls=':',  color='limegreen')
+        ax.vlines(r_500/60, ymin=ax2_ymin, ymax=ax2_ymax, ls='--', color='limegreen',
+                  zorder=0.3)
+        ax.vlines(r_200/60, ymin=ax2_ymin, ymax=ax2_ymax, ls=':',  color='limegreen',
+                  zorder=0.3)
     
     if image_size is not None: # image_size must in pixels
         assert (fig_centerRA is not None) & (fig_centerDEC is not None)
@@ -447,22 +468,22 @@ def _draw_shear_column(fig, gs, col, kind,
     ax2.set_xlim(ax2_xmin, ax2_xmax)
     ax2.set_ylim(ax2_ymin, ax2_ymax)
     if kind == 'gx':
-        ax2.axhline(y=0, linestyle='--', color='gray')
+        ax2.axhline(y=0, linestyle='-', lw=1, color='gray', zorder=0)
     ax2.set_xlabel(r'$R$'+' (arcmin)', fontsize=15)
     ax2.set_ylabel(r'Reduced shear', fontsize=15)
     ax2.minorticks_on()
-    ax2.legend(prop={'size': 8})
-    ax2.grid(linestyle=':', color='black', alpha=0.5, zorder=0)
+    ax2.legend(prop={'size': 7})
+    ax2.grid(linestyle='-', axis='y', color='gray', alpha=0.25, zorder=0)
     
     ax3.set_xlim(ax2_xmin, ax2_xmax)
     ax3.set_ylim(ax2_ymin, ax2_ymax)
     if kind == 'gx':
-        ax3.axhline(y=0, linestyle='--', color='gray')
+        ax3.axhline(y=0, linestyle='-', lw=1, color='gray', zorder=0)
     ax3.set_xlabel(r'$R$'+' (arcmin)', fontsize=15)
     ax3.set_ylabel(r'Binned reduced shear', fontsize=15)
     ax3.minorticks_on()
-    ax3.legend(prop={'size': 7})
-    ax3.grid(linestyle=':', color='black', alpha=0.5, zorder=0)
+    ax3.legend(prop={'size': 6})
+    ax3.grid(linestyle='-', axis='y', color='gray', alpha=0.25, zorder=0)
     
     return ax1, ax2, ax3
  
@@ -534,12 +555,13 @@ def proper_a_d_distance_calc(z, H0, Omega_M):
 
 
 if __name__ == '__main__':
+    date_of_run = 20260710
     img_dir  = '../../RSCH3/HSC_img_A383/'
     sci_fn_G = 'hlsp_clash_subaru_suprimecam_a383_ip_2005-v20110422_drz.fits'
     spec1d2dfolder02 = '../../RSCH3/UAO-S156-23B-A383/psf/231019/1d2dspecfiles/'
     
     # Read shear catalog
-    df     = pd.read_excel("summary/redshift_table_with_shear_notedge_constrained.xlsx", header=None, engine='openpyxl')
+    df     = pd.read_excel(f"summary/shear_table_{date_of_run}.xlsx", header=None, engine='openpyxl')
     array  = df.to_numpy()
     
     # Slits with z & posterior solved & valid but extreme g1/g2
@@ -548,9 +570,13 @@ if __name__ == '__main__':
     g2err1 = np.array(array[2:, 25], dtype=float) # should be -
     g2err2 = np.array(array[2:, 26], dtype=float) # should be +
     
-    mask_good_g1 = ~np.isnan(g1err1) & (g1err1 < 0) & (g1err2 > 0)
-    mask_good_g2 = ~np.isnan(g2err1) & (g2err1 < 0) & (g2err2 > 0)
-    mask_good_g1g2  = mask_good_g1 & mask_good_g2
+    mask_good_g1 = ~np.isnan(g1err1) & (g1err1 < 0) & (g1err2 > 0) & (np.abs(g1err1)<=1e3)
+    mask_good_g2 = ~np.isnan(g2err1) & (g2err1 < 0) & (g2err2 > 0) & (np.abs(g2err1)<=1e3)
+    
+    # slits_to_delete = [ 57, 135,  42,  58, 141,  49,  79]
+    # mask_deleted = [(num not in slits_to_delete) for num in array[2:, 0].astype(int)]
+    
+    mask_good_g1g2  = mask_good_g1 & mask_good_g2 #& mask_deleted
     g_cat_good_g1g2 = array[np.r_[True, True,  mask_good_g1g2]]
     
     cluster_centerRA  =  ( ( 2)+(48)/60+( 3.3)/3600 )*15
@@ -608,7 +634,7 @@ if __name__ == '__main__':
     df.iloc[:, 1]   = df.iloc[:, 1].round(5) # 5 digits
     df.iloc[:, 2:6] = df.iloc[:, 2:6].round(7) # 7 digits
     df.iloc[:, 6:]  = df.iloc[:, 6:].round(5) # 7 digits
-    with open('arr_shears.txt', 'w') as f:
+    with open(f'./summary/arr_shears_{date_of_run}.txt', 'w') as f:
         f.write(df.to_string(index=False))
         
     def sort_arr_by_col(arr, col_idx=0, skip_row0=True):
