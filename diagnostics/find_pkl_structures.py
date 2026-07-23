@@ -16,7 +16,7 @@ def another_load_mock(pkl_folder='mock/', Ms_folder='./', slit_num=95,
     return data_info
 
 if __name__ == '__main__':
-    slit_nums = [14, 18, 24, 25, 27, 36, 40, 49]
+    slit_nums = [78]
     for slit_num in slit_nums:
         # Load
         data_info  = another_load_mock(
@@ -27,6 +27,19 @@ if __name__ == '__main__':
         # p1_list = data_info['spec']
         # p2_dict = data_info['image']
         p3_dict = data_info['galaxy']
+        
+        p2_1_arr  = data_info['image']['data']
+        p2_2_arr  = data_info['image']['var' ]
+        p2_3_arr  = data_info['image']['mask']
+        p2_4_dict = data_info['image']['meta']
+        
+        # p2_3_1_tupl = data_info['image']['par_meta']['ngrid']
+        # p2_3_2_num  = data_info['image']['par_meta']['pixScale']
+        # p2_3_3_num  = data_info['image']['par_meta']['psfFWHM']
+        # p2_3_4_wcs  = data_info['image']['par_meta']['ap_wcs']
+        # p2_3_5_num  = data_info['image']['par_meta']['RA']
+        # p2_3_6_num  = data_info['image']['par_meta']['Dec']
+        # p2_3_7_awcs = None # data_info['image']['par_meta']['wcs']
         
         # p1_1_dict = data_info['spec'][0]
         # p1_2_dict = data_info['spec'][1]
@@ -51,19 +64,6 @@ if __name__ == '__main__':
             # p1_1_4_10_num  = data_info['spec'][spec_idx]['par_meta']['slitLen']
             # p1_1_4_11_unum = data_info['spec'][spec_idx]['par_meta']['slitLPA']
             # p1_1_4_12_unum = data_info['spec'][spec_idx]['par_meta']['slitWPA']
-            
-            p2_1_arr  = data_info['image']['data']
-            p2_2_arr  = data_info['image']['var' ]
-            p2_3_arr  = data_info['image']['mask']
-            p2_4_dict = data_info['image']['meta']
-            
-            # p2_3_1_tupl = data_info['image']['par_meta']['ngrid']
-            # p2_3_2_num  = data_info['image']['par_meta']['pixScale']
-            # p2_3_3_num  = data_info['image']['par_meta']['psfFWHM']
-            # p2_3_4_wcs  = data_info['image']['par_meta']['ap_wcs']
-            # p2_3_5_num  = data_info['image']['par_meta']['RA']
-            # p2_3_6_num  = data_info['image']['par_meta']['Dec']
-            # p2_3_7_awcs = None # data_info['image']['par_meta']['wcs']
             
             fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(6,4)) # (width, height)
             plt.subplots_adjust(hspace=0.3, wspace=0.6) # (height, width)

@@ -39,10 +39,11 @@ def read_subaru_img_wcs(image_science_filename,
         # Gain value
         science_hdr0_raw = science_hdul[0].header
         sci_GAIN = science_hdr0_raw['GAIN']
+        sci_time = science_hdr0_raw['EXPTIME']
         
         # Unit conversion
         # Science [e/s]  =  science_raw [ADU/s]  *  sci_GAIN [e/ADU]
-        science_data = science_raw * sci_GAIN # e/s
+        science_data = (science_raw / sci_time) * sci_GAIN # e/s
     
         weights_data, weights_wcs = None, None
         if image_weights_filename is not None: 
@@ -56,11 +57,13 @@ def read_subaru_img_wcs(image_science_filename,
             
             # Gain value
             weights_hdr0_raw = weights_hdul[0].header
-            wei_GAIN     = weights_hdr0_raw['GAIN']
+            wei_GAIN = weights_hdr0_raw['GAIN']
+            wei_time = sci_time # MUST FOLLOW SCI'S EXP TIME
+            # wei_time = weights_hdr0_raw['EXPTIME']
             
             # Unit conversion
-            # Weights [(s/e)^2]  =  weights_raw [(s/ADU)^2]  *  wei_GAIN^-2 [(e/ADU)^-2]
-            weights_data = weights_raw * wei_GAIN**(-2) # [e/s]^(-2)
+            # Weights [(s/e)^2] = weights_raw [ADU^-2 s^2] * wei_GAIN^-2 [(e/ADU)^-2]
+            weights_data = (weights_raw * wei_time) * wei_GAIN**(-2) # [s^2 e^-2]
             
             # Clear warnings
             log.setLevel(old_level)
