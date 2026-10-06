@@ -1,0 +1,28 @@
+shared_params-g1:  -0.04124161290994201
+shared_params-g2:   0.0
+shared_params-theta_int: 0.0
+shared_params-vcirc:   219.016730639812
+shared_params-cosi:      0.733767712971195
+shared_params-r_hl_disk: 0.7766025437247193
+shared_params-flux: 4.355008517600034
+shared_params-dx_disk: 0
+shared_params-dy_disk: 0
+shared_params-vscale: 0.10314708567188158
+shared_params-r_hl_bulge: 0.0
+shared_params-flux_bulge: 0
+shared_params-dx_bulge: 0
+shared_params-dy_bulge: 0
+
+shared_params-beta: 0
+shared_params-image_snr: 20
+shared_params-spec_snr: 10
+
+line_params-v_0:   -158.67
+line_params-v_0_2:    0
+line_params-dx_vel: 0.01252195247427759
+line_params-dy_vel: 0
+line_params-dx_vel_2: 0
+line_params-dy_vel_2: 0
+line_params-I01:       28.02
+line_params-I02:        0
+line_params-bkg_level: -2.9596592610644383

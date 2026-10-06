@@ -1,0 +1,28 @@
+shared_params-g1: 0.00
+shared_params-g2: 0.00
+shared_params-theta_int: 0.0
+shared_params-vcirc: 338.23079553462523
+shared_params-cosi: 0.5
+shared_params-r_hl_disk: 1.0
+shared_params-r_hl_bulge: 0.0
+shared_params-flux: 4.0
+shared_params-flux_bulge: 0.0
+shared_params-dx_disk: 0 # actually = -dDec (JD verified 2025-05-29)
+shared_params-dy_disk: 0 # actually = -dRA
+shared_params-dx_bulge: 0
+shared_params-dy_bulge: 0
+shared_params-vscale: 1.0
+
+shared_params-beta: 0
+shared_params-image_snr: 20
+shared_params-spec_snr: 40
+
+line_params-I01:  100
+line_params-I02:  100
+line_params-dx_vel: 0
+line_params-dy_vel: 0
+line_params-dx_vel_2: 0
+line_params-dy_vel_2: 0
+line_params-bkg_level: 0
+line_params-v_0: 0
+line_params-v_0_2: 0

@@ -1,0 +1,6 @@
+*.pyc
+*.hdf5
+*/__pycache__
+bagpipes-KL/pipes/*
+kl_mmt.egg-info
+*/Slit_*/*
