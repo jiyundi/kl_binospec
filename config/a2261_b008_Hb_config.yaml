@@ -1,0 +1,285 @@
+!!python/object/apply:builtins.getattr
+- !!python/object:klm.config.Config
+  TFprior: !!python/object:klm.config.Container
+    TF_relation_str: (log10_Mstar - a) / b
+    a: 1.718
+    b: 3.869
+    log10_vTF: 2.3404772917671366
+    sigmaTF: 0.0662413442842048
+    sigmaTF_intr: 0.058
+    use_TFprior: true
+  galaxy_params: !!python/object:klm.config.Container
+    line_profile_path: /xdisk/timeifler/pranjalrs/DEIMOS_extracted_spec/data/spec_extract_a2261b_008.pkl
+    line_species:
+    - Hb
+    log10_Mstar: 10.773306641847052
+    log10_Mstar_err: 0.12380290324800487
+    obs_type: slit
+  likelihood: !!python/object:klm.config.Container
+    apply_rhl_constraint: true
+    fid_params: null
+    isFitImage: true
+    isFitSpec: true
+    set_non_analytic_prior: null
+  params: !!python/object:klm.config.Container
+    latex_names:
+      Hb_params-I01: I_0^1
+      Hb_params-bkg_level: bkg
+      Hb_params-dx_vel: \delta_x^{\mathrm{vel}}
+      Hb_params-v_0: V_{\mathrm{sys}}
+      shared_params-cosi: \\cos i
+      shared_params-dx_bulge: \delta_x^{\mathrm{bulge}}
+      shared_params-dx_disk: \delta_x^{\mathrm{disk}}
+      shared_params-dy_bulge: \delta_y^{\mathrm{bulge}}
+      shared_params-dy_disk: \delta_y^{\mathrm{disk}}
+      shared_params-flux: \mathrm{F}
+      shared_params-flux_bulge: \mathrm{F}_{\mathrm{bulge}}
+      shared_params-gamma_t: \\gamma_t
+      shared_params-r_hl_bulge: r_{\mathrm{hl}}^{\mathrm{bulge}}
+      shared_params-r_hl_disk: r_{\mathrm{hl}}^{\mathrm{disk}}
+      shared_params-theta_int: \\theta_{\mathrm{int}}
+      shared_params-vcirc: V_{\mathrm{circ}}
+      shared_params-vscale: r_{\mathrm{vscale}}
+    names:
+    - shared_params-gamma_t
+    - shared_params-vcirc
+    - shared_params-cosi
+    - shared_params-theta_int
+    - shared_params-vscale
+    - shared_params-r_hl_disk
+    - shared_params-r_hl_bulge
+    - shared_params-dx_disk
+    - shared_params-dy_disk
+    - shared_params-dx_bulge
+    - shared_params-dy_bulge
+    - shared_params-flux
+    - shared_params-flux_bulge
+    - Hb_params-v_0
+    - Hb_params-dx_vel
+    - Hb_params-I01
+    - Hb_params-bkg_level
+    prior:
+      Hb_params-I01:
+      - 0
+      - 500
+      Hb_params-bkg_level:
+      - -10
+      - 10
+      Hb_params-dx_vel:
+      - -0.3
+      - 0.3
+      Hb_params-v_0:
+      - -500
+      - 500
+      shared_params-cosi:
+      - 0
+      - 1
+      shared_params-dx_bulge:
+      - -1
+      - 1
+      shared_params-dx_disk:
+      - -0.3
+      - 0.3
+      shared_params-dy_bulge:
+      - -1
+      - 1
+      shared_params-dy_disk:
+      - -0.3
+      - 0.3
+      shared_params-flux:
+      - 0
+      - 5
+      shared_params-flux_bulge:
+      - 0
+      - 5
+      shared_params-gamma_t:
+      - -0.5
+      - 0.5
+      shared_params-r_hl_bulge:
+      - 0.15
+      - 3
+      shared_params-r_hl_disk:
+      - 0.15
+      - 3
+      shared_params-theta_int:
+      - 0
+      - 6.283185307179586
+      shared_params-vcirc: !!python/object:scipy.stats._distn_infrastructure.rv_continuous_frozen
+        a: -.inf
+        args: !!python/tuple []
+        b: .inf
+        dist: !!python/object:scipy.stats._continuous_distns.norm_gen
+          __doc__: "A normal continuous random variable.\n\n    The location (``loc``)\
+            \ keyword specifies the mean.\n    The scale (``scale``) keyword specifies\
+            \ the standard deviation.\n\n    As an instance of the `rv_continuous`\
+            \ class, `norm` object inherits from it\n    a collection of generic methods\
+            \ (see below for the full list),\n    and completes them with details\
+            \ specific for this particular distribution.\n    \n    Methods\n    -------\n\
+            \    rvs(loc=0, scale=1, size=1, random_state=None)\n        Random variates.\n\
+            \    pdf(x, loc=0, scale=1)\n        Probability density function.\n \
+            \   logpdf(x, loc=0, scale=1)\n        Log of the probability density\
+            \ function.\n    cdf(x, loc=0, scale=1)\n        Cumulative distribution\
+            \ function.\n    logcdf(x, loc=0, scale=1)\n        Log of the cumulative\
+            \ distribution function.\n    sf(x, loc=0, scale=1)\n        Survival\
+            \ function  (also defined as ``1 - cdf``, but `sf` is sometimes more accurate).\n\
+            \    logsf(x, loc=0, scale=1)\n        Log of the survival function.\n\
+            \    ppf(q, loc=0, scale=1)\n        Percent point function (inverse of\
+            \ ``cdf`` --- percentiles).\n    isf(q, loc=0, scale=1)\n        Inverse\
+            \ survival function (inverse of ``sf``).\n    moment(order, loc=0, scale=1)\n\
+            \        Non-central moment of the specified order.\n    stats(loc=0,\
+            \ scale=1, moments='mv')\n        Mean('m'), variance('v'), skew('s'),\
+            \ and/or kurtosis('k').\n    entropy(loc=0, scale=1)\n        (Differential)\
+            \ entropy of the RV.\n    fit(data)\n        Parameter estimates for generic\
+            \ data.\n        See `scipy.stats.rv_continuous.fit <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.fit.html#scipy.stats.rv_continuous.fit>`__\
+            \ for detailed documentation of the\n        keyword arguments.\n    expect(func,\
+            \ args=(), loc=0, scale=1, lb=None, ub=None, conditional=False, **kwds)\n\
+            \        Expected value of a function (of one argument) with respect to\
+            \ the distribution.\n    median(loc=0, scale=1)\n        Median of the\
+            \ distribution.\n    mean(loc=0, scale=1)\n        Mean of the distribution.\n\
+            \    var(loc=0, scale=1)\n        Variance of the distribution.\n    std(loc=0,\
+            \ scale=1)\n        Standard deviation of the distribution.\n    interval(confidence,\
+            \ loc=0, scale=1)\n        Confidence interval with equal areas around\
+            \ the median.\n\n    Notes\n    -----\n    The probability density function\
+            \ for `norm` is:\n\n    .. math::\n\n        f(x) = \\frac{\\exp(-x^2/2)}{\\\
+            sqrt{2\\pi}}\n\n    for a real number :math:`x`.\n\n    The probability\
+            \ density above is defined in the \"standardized\" form. To shift\n  \
+            \  and/or scale the distribution use the ``loc`` and ``scale`` parameters.\n\
+            \    Specifically, ``norm.pdf(x, loc, scale)`` is identically\n    equivalent\
+            \ to ``norm.pdf(y) / scale`` with\n    ``y = (x - loc) / scale``. Note\
+            \ that shifting the location of a distribution\n    does not make it a\
+            \ \"noncentral\" distribution; noncentral generalizations of\n    some\
+            \ distributions are available in separate classes.\n\n    Examples\n \
+            \   --------\n    >>> import numpy as np\n    >>> from scipy.stats import\
+            \ norm\n    >>> import matplotlib.pyplot as plt\n    >>> fig, ax = plt.subplots(1,\
+            \ 1)\n    \n    Calculate the first four moments:\n    \n    \n    >>>\
+            \ mean, var, skew, kurt = norm.stats(moments='mvsk')\n    \n    Display\
+            \ the probability density function (``pdf``):\n    \n    >>> x = np.linspace(norm.ppf(0.01),\n\
+            \    ...                 norm.ppf(0.99), 100)\n    >>> ax.plot(x, norm.pdf(x),\n\
+            \    ...        'r-', lw=5, alpha=0.6, label='norm pdf')\n    \n    Alternatively,\
+            \ the distribution object can be called (as a function)\n    to fix the\
+            \ shape, location and scale parameters. This returns a \"frozen\"\n  \
+            \  RV object holding the given parameters fixed.\n    \n    Freeze the\
+            \ distribution and display the frozen ``pdf``:\n    \n    >>> rv = norm()\n\
+            \    >>> ax.plot(x, rv.pdf(x), 'k-', lw=2, label='frozen pdf')\n    \n\
+            \    Check accuracy of ``cdf`` and ``ppf``:\n    \n    >>> vals = norm.ppf([0.001,\
+            \ 0.5, 0.999])\n    >>> np.allclose([0.001, 0.5, 0.999], norm.cdf(vals))\n\
+            \    True\n    \n    Generate random numbers:\n    \n    >>> r = norm.rvs(size=1000)\n\
+            \    \n    And compare the histogram:\n    \n    >>> ax.hist(r, density=True,\
+            \ bins='auto', histtype='stepfilled', alpha=0.2)\n    >>> ax.set_xlim([x[0],\
+            \ x[-1]])\n    >>> ax.legend(loc='best', frameon=False)\n    >>> plt.show()\n\
+            \    \n\n    "
+          _ctor_param:
+            a: -.inf
+            b: .inf
+            badvalue: .nan
+            extradoc: null
+            longname: null
+            momtype: 1
+            name: norm
+            seed: null
+            shapes: null
+            xtol: 1.0e-14
+          _parse_arg_template: "\ndef _parse_args(self,  loc=0, scale=1):\n    return\
+            \ (), loc, scale\n\ndef _parse_args_rvs(self,  loc=0, scale=1, size=None):\n\
+            \    return self._argcheck_rvs( loc, scale, size=size)\n\ndef _parse_args_stats(self,\
+            \  loc=0, scale=1, moments='mv'):\n    return (), loc, scale, moments\n"
+          _random_state: !!python/object/apply:numpy.random._pickle.__randomstate_ctor
+            args:
+            - MT19937
+            - !!python/name:numpy.random._pickle.__bit_generator_ctor ''
+            state:
+              bit_generator: MT19937
+              gauss: 0.0
+              has_gauss: 0
+              state:
+                key: !!python/object/apply:numpy.core.multiarray._reconstruct
+                  args:
+                  - !!python/name:numpy.ndarray ''
+                  - !!python/tuple
+                    - 0
+                  - !!binary |
+                    Yg==
+                  state: !!python/tuple
+                  - 1
+                  - !!python/tuple
+                    - 624
+                  - !!python/object/apply:numpy.dtype
+                    args:
+                    - u4
+                    - false
+                    - true
+                    state: !!python/tuple
+                    - 3
+                    - <
+                    - null
+                    - null
+                    - null
+                    - -1
+                    - -1
+                    - 0
+                  - false
+                  - !!binary |
+                    U5KwM90ubIXeP5JDlgYWZ4SJns8JPr2fXqRdrjzBi7bGstdCcCX7gHslyvU+1t0jni4bmV/KadRD
+                    +3kypSoGb2nhkeh0Y9l6yKYPcR3ijtIptI5APahjEqfiJ+8V3R6TT1c2ssioleNqWorOLdLPtBlG
+                    WNcVfs+YJRKqmq4mDHiPi7NLia98P3aNfjh8i7R1vUgoWm2alumVWFzzQ1kYbW3QZwZansFt9GB3
+                    WcnUnorxGPJOxTJBvNx1xsE2dkioCTst8qPCYQz57G0gBHvNr8P5fCyRD8cfOaRLook4DAN4iZ4y
+                    mGPejyEuQCLMzlfplcdCqqDlLLU/760fq4A/I0emASWTPDUNv+isrlv3x2nabgMC9APqcJSs96SK
+                    z/L7/d/a2Jt94jitTLYtvF6MO7CUfeIBnFY6LElYzxxsNvJP/qBmuzi6afrEAKr0X0iv5S94EWMU
+                    jSOTQ9I5Xc+ZSbqA0oGHmYQD8uD1yN8QCb4I4G3aiIfBey7c/V3NKEdYwfs/98gnP+wicRWdc0ix
+                    D7Z44n250JyVoLGmHRPEuF8kCo+lVyMkV59+H+e7730o4/z7A1IK7s6VniecuUL2FGWz6F+xUVF2
+                    rDFeMs6W57/AyJXtmmH/P1TPtujz/sorC4HOY8dLWyDRenUn89GdhYUWsGCxDYhjob/cclFNcM75
+                    +l2I/I9svW9k/OVRl0ClXvSHHUwXTlAxWRqleJQln/c1uSDfWFodVErw2wPwaAPPUFnvtW65zobC
+                    +OAsHPtz8YnET7crqp/pAyc1wDc6PQWaRzSIMbVM4ogbJdFsSsE8Fc5WhONYE3bReWFss3Dvfr+p
+                    XA8CZT2Rbnqk5B+BNZmvqDOS6nTkb+RJlhPpuLSYqISGhD82TWNVYLl9w7mmWUt1g9Lh2z+xykBk
+                    4VxeU/Dkfi6Y3PnnACGI0d9j0Qap1a3EQTmgmZ30Bl/e1K/AT2PHAVLSC3pf9i0Jda1UjvVw/hWH
+                    2dej39rIL79Ukd9h3mBihfkEvG3kYqDYaaNabzAHfqAcaLzQeNBDt2DdH07HHwZszh5OaF9bCCya
+                    DDZRzcCO+avjEOKLSTsdgfD2SLC4tdtUO2Ysn85wlRPF3tRpCj7Qx/WQDl2VbrwRWxD+TsD6DODe
+                    cqt6s0jBfEWDXJRYceK9EAjhef/aYjINsSh9TV3VJTFrMBTN2kbaR1+WhqmGqihutb6GWDJzIFMs
+                    2o9PV12cusMkEQDwva+AjcPnNuBYfZ1melY7h+Hr3uKmj2rr/NjBftFZIwaWy+W8XULkedPCljKP
+                    sr5eHXtTcVItEI6awgJKmyPoJ0xtzCxFEdue0Q45+GJoWt1uZF/xFb2U0z53P9vIOtL/HZjJwFZm
+                    7ADsA01nwb6oJQiFLlaYO+eq6Hdl7IdRZ2rdEj3NAFNHuomwaF8Mf/t7LnYfDmqD2l1czStp7ymp
+                    SbMosX8cl7GbGNhZoK+e1Hehql6gG6WGzqAWIwN2W6UkIKiRjLMtQxgL3+/lNoRrY/Z+cSuoq+Pi
+                    st55VNp4E1703Ndf/4AB5xEyealmbJ8EQEUl+AlqzWl0Kfv6jBGpOa5vHTUfJW/Qs+SfKjxXpd2j
+                    UlV2bq7JuU/9+jKAJYbZ25eSu8enxcz1PZ+hppKqIG1XviSgudDww6IWyyVYcfDOc0QL0M5adYjw
+                    TnS79TMeWC662WZWCd1h1znH5JsOOoHaxlV9OtfhygTQJC4JpjVGmF97u/4bhHi3jyoMJjrExVxd
+                    vG2JK3SoZ5zHO17WH90ckwggq42FOGQrUTDi8nIxHPjvG1uZ84fGLkaaI/PmW3fo1OWCczMle/X7
+                    bjaehdcp1Y4FKpJ8howrdD7DPlSPLL/joVUmFXFzzlOg1aF3NraoUT8dA1CYvqimDkEw55q1FYBO
+                    9VkhIGuQ6fFnXCvVYNdzh4F1302qaz3wNAaMq72Ie7a2DHqW7fAqfSCFk3jScveOAEqP0A102pOx
+                    rNWqnrH/rtyaKGozM7CkBqP7o2WdP3FnvBPawloR+e3qBQEn8rZcZ5sXwN1xHTTIH+4F3gF27rHG
+                    q7EEyZByUNeCvW1Y6Qmt9qeGLpq+guVKkdBkLAbkR3/Qf8hE5c2qMfcswEtzssfvvIRDA863REX9
+                    xicm6Pm7PxHYRod02LRbAN5grfHl0pHMZyajZgeiOxXGp4X8oyea5lIwNYMgHDpkbuPmjdZA9RXN
+                    2B7ygyagILwIcwqTzfdPOgghyGenKJ6FX5pyHS7s6jeLJm7Iymn8bO6MODalUknrT5UovtHC1KP2
+                    Y6Sr5Xmi5msgRVVBObyG03Nl95sqXcrCHbRP4Yz8roWYWvO52xwKgIvv4CjhixVhAq6GWeRzNeFH
+                    Wc7/k6Go9nuRRk2MEGuaLbJztvySWqC1S5F4c/Ru1JzdxznTBNMB16elc7diXfGXdNk082j9NIfn
+                    96/h5iH3Dj3urIyMneZIMesiA7MtHw3hpLdkM0k83d5/60EW6HCYNv3AmitP44UL3NviDtZCvtbq
+                    x0EGwB3TmEGAm8QsxlgWur7i6eZdjc7TT3+VtIa3sJYcmbc5smuFTkGPBk6E/0WJ+pw7SYw9YMQK
+                    wUbGW9DfhfO53JMj0f7e5GEUoVHrBgT8fqbUK/O5XxWxOLK0psG+YFjJ6I/GCzGKkd3iKwsXvAkh
+                    zZHCTYDiNFe0r/AmIAc8CxO68aSkitk2VxFHYJ8f7LVzcRCGaiJqlv4Wvs3PdswnTiKm0fwln2CD
+                    TEpLFGxglM1A7+qjBCQytcdQTCxwhFLCESVvedeoSzc6DcSFo9rLzbKA5nJtPqvOS+lpOV1AVgaZ
+                    p6yZlj29C3PZBP7RXh/HmcJeSSGHWY54iLHnmXa8Tc1jMrItjrnnsWE/3JYqLnVmDeZObl4ThDG+
+                    WWd2B9syiBtfFK4qe6qp/+Kae7E2ZtedawhCc8pzvcNY3ZwPgJUK26KlwzkvXnoxJkUGeZY/r+FJ
+                    FwlomqBgMskWbB3w/7bIv1fnQbh+L5zfOVA4svOIkimpzaiLHhMq0Bm7WgmaJc5JaTwnTRPSP8LS
+                    zPSDOOrd2RfwsvLmY1sDlv3O+bAruB6rxv7wtHwNCuZ+DfcZbYX6gt4na5PwXWhyRnpQSXiMiPkx
+                    hTZ+eDIFHnJib0DGnnj6jwcepfR7rD8hWrQNmXckE/AIMVz7TZd5Y2MNsLr/mWvw+qMJRsxoHM2T
+                    tn1PwsDEg4uOYYHHYUQ74c586S++YJZ42G9gLc1Kv4sRcaGJe1vENWal5hwmhtddyWIs4rDiKFX8
+                    FkQWAJkmQ0x8wTVPKtOUCG6rm7f+3r0+CSQd3OMQvIcyTd42wd69wd9EPj98
+                pos: 160
+          _stats_has_moments: false
+          a: -.inf
+          b: .inf
+          badvalue: .nan
+          extradoc: null
+          moment_type: 1
+          name: norm
+          numargs: 0
+          shapes: null
+          xtol: 1.0e-14
+        kwds:
+          loc: 2.3404772917671366
+          scale: 0.0662413442842048
+      shared_params-vscale:
+      - 0.1
+      - 3
+  verbose: false
+  vmap_type: null
+- __repr__

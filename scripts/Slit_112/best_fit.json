@@ -1,0 +1,218 @@
+{
+    "fid_params": {
+        "shared_params": {
+            "g1": 0.0,
+            "g2": 0.0,
+            "r_hl_bulge": 0.0,
+            "flux_bulge": 0.0,
+            "dx_bulge": 0,
+            "dy_bulge": 0,
+            "beta": 0
+        },
+        "line_params": {
+            "f1_0_spec1": 1,
+            "f1_0_spec2": 1,
+            "f1_0_spec3": 1,
+            "dx_vel_spec1": 0,
+            "dy_vel_spec1": 0,
+            "dx_vel_spec2": 0,
+            "dy_vel_spec2": 0,
+            "dx_vel_spec3": 0,
+            "dy_vel_spec3": 0,
+            "dx_spec1": 0,
+            "dy_spec1": 0,
+            "dx_spec2": 0,
+            "dy_spec2": 0,
+            "dx_spec3": 0,
+            "dy_spec3": 0,
+            "bkg_level_spec1": 0,
+            "bkg_level_spec2": 0,
+            "bkg_level_spec3": 0
+        }
+    },
+    "fitting_params": {
+        "shared_params": {
+            "g1": {
+                "latex_name": "$g_1$",
+                "prior": {
+                    "max": 0.15,
+                    "min": -0.15
+                }
+            },
+            "g2": {
+                "latex_name": "$g_2$",
+                "prior": {
+                    "max": 0.15,
+                    "min": -0.15
+                }
+            },
+            "theta_int": {
+                "latex_name": "$\\theta_{\\mathrm{int}}$",
+                "prior": {
+                    "max": 3.141592653589793,
+                    "min": -3.141592653589793
+                }
+            },
+            "vcirc": {
+                "latex_name": "$v_{\\rm circ}$",
+                "prior": {
+                    "norm": {
+                        "loc": "TFprior.log10_vTF",
+                        "scale": "TFprior.sigmaTF"
+                    }
+                }
+            },
+            "cosi": {
+                "latex_name": "$\\cos{(i)}$",
+                "prior": {
+                    "max": 1,
+                    "min": 0
+                }
+            },
+            "r_hl_disk": {
+                "latex_name": "$r_{\\mathrm{hl, disk}}$",
+                "prior": {
+                    "min": 0.2,
+                    "max": 3.0
+                }
+            },
+            "flux": {
+                "latex_name": "$\\log{(F_{\\rm disk})}$",
+                "prior": {
+                    "max": 6,
+                    "min": 3
+                }
+            },
+            "dx_disk": {
+                "latex_name": "$\\Delta x_{\\rm disk}$",
+                "prior": {
+                    "min": -1,
+                    "max": 1
+                }
+            },
+            "dy_disk": {
+                "latex_name": "$\\Delta y_{\\rm disk}$",
+                "prior": {
+                    "min": -1,
+                    "max": 1
+                }
+            },
+            "vscale": {
+                "latex_name": "$r_{\\mathrm{vscale}}$",
+                "prior": {
+                    "max": 4,
+                    "min": 0.01
+                }
+            }
+        },
+        "line_params": {
+            "v_0": {
+                "latex_name": "$v_0$",
+                "prior": {
+                    "min": -180,
+                    "max": 100
+                }
+            },
+            "I01_spec1": {
+                "latex_name": "$I_0^{\\rm Spec 1}$",
+                "prior": {
+                    "min": 0,
+                    "max": 1000
+                }
+            },
+            "I01_spec2": {
+                "latex_name": "$I_0^{\\rm Spec 2}$",
+                "prior": {
+                    "min": 0,
+                    "max": 1000
+                }
+            },
+            "I01_spec3": {
+                "latex_name": "$I_0^{\\rm Spec 3}$",
+                "prior": {
+                    "min": 0,
+                    "max": 1000
+                }
+            }
+        }
+    },
+    "maximum_likelihood": {
+        "point": {
+            "shared_params-g1": -0.014456300258783278,
+            "shared_params-g2": -0.0017835794348309286,
+            "shared_params-theta_int": 2.92487404460696,
+            "shared_params-vcirc": 379.30866396937574,
+            "shared_params-cosi": 0.4516214671374572,
+            "shared_params-r_hl_disk": 0.732907368901992,
+            "shared_params-flux": 4.62567527633318,
+            "shared_params-dx_disk": 0.09791828856656482,
+            "shared_params-dy_disk": 0.3288897965677273,
+            "shared_params-vscale": 1.2305125019851633,
+            "O2_params-v_0": 5.339602670358175,
+            "O2_params-v_0_2": 2.937456386307872,
+            "O2_params-I01_spec1": 17.64948627408691,
+            "O2_params-I02_spec1": 18.433822194675376,
+            "O2_params-I01_spec2": 17.1420437702422,
+            "O2_params-I02_spec2": 12.223276626100121,
+            "O2_params-I01_spec3": 107.72531819743669,
+            "O2_params-I02_spec3": 119.96538468022943,
+            "O3b_params-v_0": 4.618335024850552,
+            "O3b_params-I01_spec1": 17.810512577071446,
+            "O3b_params-I01_spec2": 5.82478477066406,
+            "O3b_params-I01_spec3": 120.4893891805382
+        },
+        "log_likelihood": -3190.688440044172
+    },
+    "posterior_median": {
+        "point": {
+            "shared_params-g1": -0.04755097420724105,
+            "shared_params-g2": -0.031371114242394325,
+            "shared_params-theta_int": 2.966872310130847,
+            "shared_params-vcirc": 313.3798206110061,
+            "shared_params-cosi": 0.44388636942712906,
+            "shared_params-r_hl_disk": 0.7356121629163656,
+            "shared_params-flux": 4.61881650757341,
+            "shared_params-dx_disk": 0.08151996948206292,
+            "shared_params-dy_disk": 0.328821469944138,
+            "shared_params-vscale": 0.9440404557123773,
+            "O2_params-v_0": 5.716683517771908,
+            "O2_params-v_0_2": 1.5420056949670025,
+            "O2_params-I01_spec1": 17.166200310657352,
+            "O2_params-I02_spec1": 19.28417636705192,
+            "O2_params-I01_spec2": 17.733342084550845,
+            "O2_params-I02_spec2": 12.766712531753969,
+            "O2_params-I01_spec3": 107.69026960719454,
+            "O2_params-I02_spec3": 118.54348625609026,
+            "O3b_params-v_0": 7.0170044602162625,
+            "O3b_params-I01_spec1": 17.910099147103036,
+            "O3b_params-I01_spec2": 5.898881105889161,
+            "O3b_params-I01_spec3": 117.85480388760844
+        }
+    },
+    "posterior_mode": {
+        "point": {
+            "shared_params-g1": -0.04549447661527012,
+            "shared_params-g2": -0.031076698223639385,
+            "shared_params-theta_int": 2.965492695467959,
+            "shared_params-vcirc": 312.1723704951909,
+            "shared_params-cosi": 0.44343985181049933,
+            "shared_params-r_hl_disk": 0.7296891794726252,
+            "shared_params-flux": 4.617594404111067,
+            "shared_params-dx_disk": 0.08291609501571484,
+            "shared_params-dy_disk": 0.3293292935194816,
+            "shared_params-vscale": 0.9405910502623883,
+            "O2_params-v_0": 5.827142844047046,
+            "O2_params-v_0_2": 1.8943688387654731,
+            "O2_params-I01_spec1": 17.01500341215889,
+            "O2_params-I02_spec1": 19.01597919701347,
+            "O2_params-I01_spec2": 18.017668020912954,
+            "O2_params-I02_spec2": 12.98581693535445,
+            "O2_params-I01_spec3": 108.10547925251282,
+            "O2_params-I02_spec3": 119.12636303126294,
+            "O3b_params-v_0": 6.952089908881732,
+            "O3b_params-I01_spec1": 18.018435243852856,
+            "O3b_params-I01_spec2": 6.002656800436338,
+            "O3b_params-I01_spec3": 117.0883647321966
+        }
+    }
+}

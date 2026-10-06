@@ -1,0 +1,109 @@
+shared_params:
+    gamma_t:
+        latex_name: $g_t$
+        prior:
+            min: -0.5
+            max:  0.5
+    # g1: # 1
+    #     latex_name: $g_1$
+    #     prior:
+    #         min: -0.5
+    #         max:  0.5
+    # g2: # 2
+    #     latex_name: $g_2$
+    #     prior:
+    #         min: -0.5
+    #         max:  0.5
+    theta_int: # 3
+        latex_name: $\theta_{\mathrm{int}}$
+        prior:
+            min: 0
+            max: 6.28318530718
+    vcirc: # 4
+        latex_name: $v_{\rm circ}$
+        prior:
+            norm:
+                loc:   TFprior.log10_vTF
+                scale: TFprior.sigmaTF
+    cosi: # 5
+        latex_name: $\cos{(i)}$
+        prior:
+            min: 0
+            max: 1
+    r_hl_disk: # 6
+        latex_name: $r_{\mathrm{hl, disk}}$
+        prior: 
+            min: 0.15
+            max: 3.0
+    flux: # 7
+        latex_name: $\log{(F_{\rm disk})}$
+        prior:
+         min: 0
+         max: 5
+    dx_disk: # 8
+        latex_name: $\Delta x_{\rm disk}$
+        prior: 
+            min: -0.3
+            max:  0.3
+    dy_disk: # 9
+        latex_name: $\Delta y_{\rm disk}$
+        prior: 
+            min: -0.3
+            max:  0.3
+    vscale: # 10
+        latex_name: $r_{\mathrm{vscale}}$
+        prior:
+            min: 0.001
+            max: 3
+    # flux_bulge:
+    #     latex_name: $\log{(F_{\rm bulge})}$
+    #     prior:
+    #         min: 0
+    #         max: 5
+    # r_hl_bulge:
+    #     latex_name: $r_{\mathrm{hl, bulge}}$
+    #     prior: 
+    #         min: 0.15 
+    #         max: 3.0
+    # dx_bulge: # 11
+    #     latex_name: $\Delta x_{\rm bulge}$
+    #     prior: 
+    #         min: -1
+    #         max:  1
+    # dy_bulge: # 12
+    #     latex_name: $\Delta y_{\rm bulge}$
+    #     prior: 
+    #         min: -1
+    #         max:  1
+
+line_params:
+    v_0:
+        latex_name: $v_0$
+        prior:
+            min: -500
+            max:  500
+    I01_spec1: # 17: A 
+        latex_name: $I_0^{\rm Spec 1}$
+        prior:
+            min:    0
+            max:  500
+    bkg_level_spec1:
+        latex_name: $I_{\rm bkg}^{\rm Spec 1}$
+        prior:
+            min: -10
+            max:  10
+    dx_vel_spec1:
+        latex_name: $\Delta x_{\rm vel, Spec 1}$
+        prior: 
+            min: -0.3
+            max:  0.3
+    f1_1_spec1:
+        latex_name: $f_{\sigma, L}^{\rm Spec\,1}$
+        prior:
+            min: 0.25
+            max: 3.0
+    f1_2_spec1:
+        latex_name: $f_{\sigma, R}^{\rm Spec\,1}$
+        prior:
+            min: 0.25
+            max: 3.0
