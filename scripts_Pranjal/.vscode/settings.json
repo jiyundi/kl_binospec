@@ -3,6 +3,6 @@
     "python-envs.defaultPackageManager": "ms-python.python:conda",
     "python.defaultInterpreterPath": "/home/u9/jiyundi/miniconda3/envs/KL-env/bin/python",
     "python.analysis.extraPaths": [
-        "/xdisk/timeifler/jiyundi/kl_mmt"
+        "/xdisk/timeifler/jiyundi/kl_binospec"
     ]
 }

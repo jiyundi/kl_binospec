@@ -2,7 +2,7 @@
 {
     "python.defaultInterpreterPath": "/home/u9/jiyundi/miniconda3/envs/KL-env/bin/python",
     "python.analysis.extraPaths": [
-        "/xdisk/timeifler/jiyundi/kl_mmt"
+        "/xdisk/timeifler/jiyundi/kl_binospec"
     ],
     "python-envs.terminal.autoActivationType": "command",
     "python.terminal.activateEnvironment": true,

@@ -3,7 +3,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kl_mmt"
+name = "kl_binospec"
 version = "0.2.0"
 description = "KL fitting toolkit"
 
