@@ -363,7 +363,7 @@ def exam_line_profile_A(
         spec_var=None,
         doublets=("O2",),
         filename="test_LPF_A.jpg",
-        plot_with=None, label_of_plot_with=None
+        plot_with=None, label_of_plot_with=None, plot_with_color='red'
     ):
     """
     LPFs = (Amp, Mu, sigma_left, sigma_right)
@@ -612,7 +612,9 @@ def exam_line_profile_A(
 
                 if np.isfinite(vmax) and vmax > 0:
                     plot_kwargs.update(vmin=-vmax, vmax=vmax)
-
+        
+        # 高级extent - 第k列不要简单画在横坐标k，横坐标也与y有关！
+        #              第(y, k)像素画在横坐标wave[y, k]上。
         im = ax_image.pcolormesh(
             wave,                        # shape (ny, nx)，单位 Å
             y_grid,                      # shape (ny, nx)
@@ -735,7 +737,7 @@ def exam_line_profile_A(
             xerr=np.array([plot_with[2][valid].to(u.Angstrom).value, 
                            plot_with[3][valid].to(u.Angstrom).value]),
             fmt='x',
-            color='magenta', 
+            color=plot_with_color, 
             alpha=0.5,
             capsize=5,
             label=label_of_plot_with,
@@ -750,7 +752,7 @@ def exam_line_profile_A(
         ax_sigma.plot(
             sigma_left_plot,
             all_rows,
-            color='magenta',
+            color=plot_with_color,
             alpha=0.5,
             linestyle="--",
             linewidth=1.5,

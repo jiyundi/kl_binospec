@@ -95,6 +95,7 @@ class _PanelPlotter:
                  else np.nanstd(obs))
         vmin = np.nanmin(obs[mask] if mask is not None else 0)
         vmax = 5 * noise
+        vmax = np.nanmax(obs[mask] if mask is not None else 1)
 
         obs_show = np.where(mask, obs, np.nan) if mask is not None else obs
         res_show = np.where(mask, obs - fit, np.nan) if mask is not None else obs - fit

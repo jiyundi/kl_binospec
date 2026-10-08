@@ -3,9 +3,9 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kl_binospec"
+name = "kl_mmt"
 version = "0.2.0"
-description = "KL fitting toolkit for the MMT Binospec instrument"
+description = "KL fitting toolkit"
 
 [tool.setuptools]
 include-package-data = true

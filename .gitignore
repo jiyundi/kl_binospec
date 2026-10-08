@@ -1,6 +1,16 @@
-*.pyc
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Large fitting outputs
 *.hdf5
-*/__pycache__
-bagpipes-KL/pipes/*
-kl_mmt.egg-info
-*/Slit_*/*
+*.h5
+
+# Slit fitting directories
+**/Slit_*/**
+
+# Batch fitting runs
+**/runs_*/
+
+# OS/editor files
+.DS_Store

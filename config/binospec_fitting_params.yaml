@@ -2,13 +2,13 @@ shared_params:
     g1: # 1
         latex_name: $g_1$
         prior:
-            max:  0.15
-            min: -0.15
+            max:  0.3
+            min: -0.3
     g2: # 2
         latex_name: $g_2$
         prior:
-            max:  0.15
-            min: -0.15
+            max:  0.3
+            min: -0.3
     theta_int: # 3
         latex_name: $\theta_{\mathrm{int}}$
         prior:
@@ -23,12 +23,12 @@ shared_params:
     cosi: # 5
         latex_name: $\cos{(i)}$
         prior:
-            max: 1
             min: 0
+            max: 1
     r_hl_disk: # 6
         latex_name: $r_{\mathrm{hl, disk}}$
         prior: 
-            min: 0.2 
+            min: 0.1
             max: 3.0
     flux: # 7
         latex_name: $\log{(F_{\rm disk})}$
@@ -48,8 +48,8 @@ shared_params:
     vscale: # 10
         latex_name: $r_{\mathrm{vscale}}$
         prior:
-            max: 4
-            min: 0.01
+            min: 0.001
+            max: 3
     # dx_bulge: # 11
     #     latex_name: $\Delta x_{\rm bulge}$
     #     prior: 
@@ -65,8 +65,8 @@ line_params:
     v_0:
         latex_name: $v_0$
         prior:
-            min: -180
-            max:  100
+            min: -200
+            max:  200
     I01_spec1: # 17: A 
         latex_name: $I_0^{\rm Spec 1}$
         prior:
@@ -82,18 +82,63 @@ line_params:
         prior:
             min:    0
             max: 1000
-    f1_0_spec1:
-        latex_name: $f_{\sigma(\lambda)}$
+    bkg_level_spec1:
+        latex_name: $I_{\rm bkg}^{\rm Spec 1}$
         prior:
-            min:  0.5
-            max:  9.5
-    f1_0_spec2:
-        latex_name: $f_{\sigma(\lambda)}$
+            min: -10
+            max:  10
+    bkg_level_spec2:
+        latex_name: $I_{\rm bkg}^{\rm Spec 2}$
         prior:
-            min:  0.5
-            max:  9.5
-    f1_0_spec3:
-        latex_name: $f_{\sigma(\lambda)}$
+            min: -10
+            max:  10
+    bkg_level_spec3:
+        latex_name: $I_{\rm bkg}^{\rm Spec 3}$
         prior:
-            min:  0.5
-            max:  9.5
+            min: -10
+            max:  10
+    dx_vel_spec1:
+        latex_name: $\Delta x_{\rm vel, Spec 1}$
+        prior: 
+            min: -0.3
+            max:  0.3
+    dx_vel_spec2:
+        latex_name: $\Delta x_{\rm vel, Spec 2}$
+        prior: 
+            min: -0.3
+            max:  0.3
+    dx_vel_spec3:
+        latex_name: $\Delta x_{\rm vel, Spec 3}$
+        prior: 
+            min: -0.3
+            max:  0.3
+    f1_1_spec1:
+        latex_name: $f_{\sigma, L}^{\rm Spec 1}$
+        prior:
+            min: 0.25
+            max: 3.0
+    f1_2_spec1:
+        latex_name: $f_{\sigma, R}^{\rm Spec 1}$
+        prior:
+            min: 0.25
+            max: 3.0
+    f1_1_spec2:
+        latex_name: $f_{\sigma, L}^{\rm Spec 2}$
+        prior:
+            min: 0.25
+            max: 3.0
+    f1_2_spec2:
+        latex_name: $f_{\sigma, R}^{\rm Spec 2}$
+        prior:
+            min: 0.25
+            max: 3.0
+    f1_1_spec3:
+        latex_name: $f_{\sigma, L}^{\rm Spec 3}$
+        prior:
+            min: 0.25
+            max: 3.0
+    f1_2_spec3:
+        latex_name: $f_{\sigma, R}^{\rm Spec 3}$
+        prior:
+            min: 0.25
+            max: 3.0

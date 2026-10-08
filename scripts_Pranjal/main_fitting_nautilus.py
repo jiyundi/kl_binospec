@@ -13,7 +13,7 @@ from core.post_fitting import plot_obs_fit_res
 from core.fitting_result_utils import complete_flattened_fit_params
 from klm.parameters import Parameters
 from klm.nautilus_sampler import NautilusSampler
-from klm.line_profile_extraction import extract_asymmetric_LPF, exam_line_profile
+# from klm.line_profile_extraction import extract_asymmetric_LPF, exam_line_profile
 from klm.line_profile_extraction import extract_asymmetric_lpf_A, exam_line_profile_A
 from klm.safe_plot import setup; setup() # must before plt
 
@@ -25,10 +25,100 @@ plt.rcParams.update({
 })
 
 
+def _plot_image(data, mask, increasing_RA=False, increasing_Dec=True, plotname='test.jpg'):
+    _, ax = plt.subplots(nrows=1, ncols=1, figsize=(4,3)) # (width, height)
+    im = ax.imshow(np.where(mask, data, np.nan), aspect='auto', cmap='viridis', origin='lower')
+    ax.set_xlabel('Increasing RA -->'  if increasing_RA  else 'Decreasing RA -->')
+    ax.set_ylabel('Increasing Dec -->' if increasing_Dec else 'Decreasing Dec -->')
+    plt.colorbar(im, ax=ax)
+    plt.tight_layout()
+    plt.savefig(plotname)
+    return
+
+def _plot_spec(data, mask, wave=None, plotname='test.jpg'):
+    _, ax = plt.subplots(nrows=1, ncols=1, figsize=(4,3)) # (width, height)
+    if wave is None:
+        ax.set_xlabel('Wavelength pixels')
+        im = ax.imshow(np.where(mask, data, np.nan), aspect='auto', cmap='viridis', origin='lower')
+    else:
+        ax.set_xlabel(f'Wavelength (N={wave.shape[1]} px)')
+        cmap = plt.colormaps['viridis'].copy()
+        cmap.set_bad("white")
+        im = ax.pcolormesh(
+            wave.value if isinstance(wave, u.Quantity) else wave,       # shape (ny, nx)，单位 Å
+            np.broadcast_to(np.arange(len(data))[:, None], wave.shape), # shape (ny, nx)
+            np.ma.array(data, mask=(~np.isfinite(data)|~mask)),    # mask显示成白色
+        )
+    ax.set_ylabel('Slit spatial pixels')
+    ax.grid(linestyle='--', color='silver', alpha=0.25)
+    plt.colorbar(im, ax=ax)
+    plt.tight_layout()
+    plt.savefig(plotname)
+    return
+
+def circular_maskout(image_data, image_mask=None, 
+                     n_circles=1, radius_range=(2, 16), avoid_center=5,
+                     np_random_gen=None, plot=False):
+    r_min, r_max = radius_range # px
+
+    if image_mask is not None:
+        circular_mask = ~image_mask.copy()
+    else:
+        circular_mask = np.zeros((ny, nx), dtype=bool)
+    
+    ny, nx = image_data.shape
+    yy, xx = np.ogrid[:ny, :nx]
+    if np_random_gen is None:
+        np_random_gen = np.random.default_rng() # any random seed
+    
+    x0 = (nx - 1) / 2
+    y0 = (ny - 1) / 2
+
+    for _ in range(n_circles):
+        r = np_random_gen.integers(r_min, r_max + 1)
+
+        while True:
+            cx = np_random_gen.integers(r, nx)
+            cy = np_random_gen.integers(r, ny)
+
+            distance_to_center = np.hypot(cx - x0, cy - y0)
+
+            if distance_to_center >= r + avoid_center:
+                break
+
+        region = (xx - cx)**2 + (yy - cy)**2 <= r**2
+        circular_mask |= region
+    
+    if plot: 
+        RA_plus  = (True if data_info['image']['meta']['wcs'].cd[0, 0] > 0 else False)
+        Dec_plus = (True if data_info['image']['meta']['wcs'].cd[1, 1] > 0 else False)
+        _plot_image(image_data, ~circular_mask, RA_plus, Dec_plus)
+
+    return ~circular_mask
+
+def spec_add_noise( spec_noise, shape, 
+                    sigma_spatial=5,   # in spatial pixels
+                    sigma_wavepixel=2, # in wavelength pixels, keep small for less corr on wave
+                    np_random_gen=None):
+    if np_random_gen is None:
+        np_random_gen = np.random.default_rng()
+
+    white_noise = np_random_gen.normal(loc=0.0, scale=spec_noise, size=shape)
+    corr_noise  = gaussian_filter(
+        white_noise, mode="reflect", # Spatially-correlated noise
+        sigma =(sigma_spatial, sigma_wavepixel) # keep small for less corr on wave
+        )
+    corr_noise -= corr_noise.mean() # unbias
+    corr_noise *= spec_noise / corr_noise.std() # normalize
+
+    return corr_noise
+
+
+
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
-    parser.add_argument('--slitID', default=  0, type=int)
+    parser.add_argument('--slitID', default=  1, type=int)
     parser.add_argument('--run',    default=  1, type=int)
     # Warning: ONLY input True if you want following two arguments 
     #          because of bool("True"/"False") == True.
@@ -67,111 +157,122 @@ if __name__ == '__main__':
         print( "\033[43m" + 'WARNING:' + "\033[0m " + 
               f'Slit {slit_name} skipped because no PKL found at: {data_info_path}\n')
         os._exit(0)
-    
-    # CAUTION
-    # print('CAUTION: spec is masked out the central region.')
-    # spec_mask = data_info['spec'][0]['mask']
-    # new_mask  = np.ones(spec_mask.shape, dtype=bool)
-    # new_mask[new_mask.shape[0]//2 - 5 : new_mask.shape[0]//2 + 5, :] = False
-    # data_info['spec'][0]['mask'] = new_mask
 
+    spec_data_no_noise = data_info['spec'][0]['data'].copy()
+    
+    # ------------- 1.0 Realistic obs conditions ---------------- #
+    print('CAUTION: adding some realistics on raw data.')
+    from scipy.ndimage import gaussian_filter
+
+    np_random_gen_image = np.random.default_rng(seed = slit_name)
+    np_random_gen_spec  = np.random.default_rng(seed = slit_name + 1)
+
+    # Read image
+    image_data = data_info['image']['data']
+    image_mask = data_info['image']['mask']
+    image_var  = data_info['image']['var' ]
+    _plot_image(image_data, image_mask)
+
+    # Add noise (image)
+    image_noise = np.sqrt(image_var) # don't filter b/c all bkg px == 0
+    image_data += np_random_gen_image.normal(
+        loc=0.0, scale=image_noise, size=image_data.shape
+        )
+    _plot_image(image_data, image_mask)
+
+    # Masking out 5 fake neighboring galaxies (image)
+    for _ in range(5):
+        image_mask[:] = circular_maskout( # [:] means overwrite dict array
+            image_data, image_mask, np_random_gen=np_random_gen_image
+            )
+    
+    # Mask out (flux + Gauss_noise + var) <= 0 (image)
+    image_mask &= (image_data + image_var > 0)
+    _plot_image(image_data, image_mask)
+
+    # Read spec
     spec_data = data_info['spec'][0]['data']
     spec_mask = data_info['spec'][0]['mask']
+    spec_var  = data_info['spec'][0]['var' ]
     spec_wave = data_info['spec'][0]['meta']['lambda_grid']
-    # lambda_scale = 0.33 # A/px
-        
+    _plot_spec(spec_data, spec_mask, spec_wave)
+
+    # Add noise (spec):
+    # Spec contains negative flux, the noise level needs to keep SNR same
+    spec_noise  = np.sqrt(spec_var)
+    spec_clean  = spec_data.copy()
+    white_noise = np_random_gen_spec.normal(
+        loc=0.0, scale=spec_noise, size=spec_clean.shape
+        )
+    spec_noisy = spec_clean + white_noise * 0.25
+    
+    # Check SNR
+    from core.spec_snr_estimate import bkg_estimate
+    bg = bkg_estimate(spec_noisy)[0] # = -2.9597
+    spec_obs_zero_bg = np.where(spec_mask, spec_noisy - bg, np.nan)
+    print('Spec SNR (after adding noise) =', 
+        np.nansum(spec_obs_zero_bg) /
+        np.sqrt(np.nansum(spec_var + spec_obs_zero_bg))
+    )
+    # os._exit(0)
+
+    # If SNR is good, then write noisy in data
+    data_info['spec'][0]['data'] = spec_noisy
+    spec_data = data_info['spec'][0]['data']
+    _plot_spec(spec_data, spec_mask, spec_wave)
+    
+    # Masking out fake line masks (spec)
+
+
+    # Mask out (flux + Gauss_noise + var) <= 0 (spec)
+    spec_mask &= (spec_data + spec_var > 0)
+    _plot_spec(spec_data, spec_mask, spec_wave)
+
     # Delete my LPFs, overwrite with Pranjal's
     data_info['spec'][0]['meta'].pop('line_profile')
 
     # ------------- 1.1 Load LPF by Pranjal ---------------- #
-    with open(f'{mock_folder}/spec_extract_a2261b_008.pkl', "rb") as f:
-        line_profile = joblib.load(f)
-        
-    line_profile_Hb = line_profile['Hb']
-    Amp1     = line_profile_Hb[0][:, 0]
-    mu1      = line_profile_Hb[1][:, 0]
-    sigma_1l = line_profile_Hb[2][:, 0] # First Gaussian, left  wing
-    sigma_1r = line_profile_Hb[3][:, 0] # First Gaussian, right wing
-    Amp2     = line_profile_Hb[0][:, 1]
-    mu2      = line_profile_Hb[1][:, 1]
-    sigma_2l = line_profile_Hb[2][:, 1] # Second Gaussian, left  wing
-    sigma_2r = line_profile_Hb[3][:, 1] # Second Gaussian, right wing
+    # with open(f'{mock_folder}/spec_extract_a2261b_008.pkl', "rb") as f:
+    #     line_profile = joblib.load(f)
 
-    # Clear zero mu wavelengths
-    zero_mask = (mu1 == 0) & (mu2 == 0)
-    for arr in (Amp1, mu1, sigma_1l, sigma_1r, 
-                Amp2, mu2, sigma_2l, sigma_2r):
-        arr[zero_mask] = np.nan
-
-    # Unit conversion: A -> px
-    # align min spec_wavelength with x=0
-    # E.g. mu = [8848 A, 8850 A, ...] --> [24 px, 25 px, ...]
-    # first_col_wave = spec_wave[:, 0].value # unit is A
-    # mu1 = (mu1.value - first_col_wave) / lambda_scale # A/px
-    # if np.nansum(mu2.value) != 0:
-    #     mu2 = (mu2.value - first_col_wave) / lambda_scale # A/px
+    # ------------- 1.2 Convert JD LPF into dict ---------------- #
+    Amp_0, Mu_0, sigma1_0, sigma2_0 = extract_asymmetric_lpf_A(
+        spec_data_no_noise,
+        spec_wave,
+        line='Hb'
+        )
     
-    Amp = np.array([Amp1, Amp2]).T / np.nanmax([Amp1, Amp2]) * np.nanmax(spec_data[spec_mask])
-    Mu  = np.array([ mu1,  mu2]).T
-    sigma1 = np.array([sigma_1l, sigma_2l]).T
-    sigma2 = np.array([sigma_1r, sigma_2r]).T
-
-    Amp_JD, Mu_JD, sigma1_JD, sigma2_JD = extract_asymmetric_lpf_A(
+    Amp, Mu, sigma1, sigma2 = extract_asymmetric_lpf_A(
         spec_data,
         spec_wave,
         line='Hb'
-    )
+        )
 
     restored, residual = exam_line_profile_A(
         (Amp, Mu, sigma1, sigma2),
         spec_data,
-        spec_mask,
-        wavelength=spec_wave,
-        line='Hb', 
-        plot_with=(Amp_JD[:, 0], Mu_JD[:, 0], sigma1_JD[:, 0], sigma2_JD[:, 0]), 
-        label_of_plot_with='JD extracted'
-        )
-
-    # restored, residual = exam_line_profile(
-    #         (Amp, Mu, sigma1, sigma2),
-    #         spec_data,
-    #         spec_mask, 
-    #         spec_var = data_info['spec'][0]['var'],
-    #         lambda_scale = lambda_scale
-    #     )
-
-    # ------------- 1.2 Convert JD LPF into dict ---------------- #
-    # lambda_scale = np.nanmedian(np.abs(np.diff(spec_wave.to(u.Angstrom).value, axis=1)), axis=1)
-    # Amp_JD, Mu_JD, sigma1_JD, sigma2_JD = extract_asymmetric_lpf_A(
-    #     spec_data,
-    #     spec_wave,
-    #     line='Hb'
-    # )
-
-    # LPFs_JD = (Amp_JD, Mu_JD, sigma1_JD, sigma2_JD)
-
-    restored, residual = exam_line_profile_A(
-        (Amp_JD, Mu_JD, sigma1_JD, sigma2_JD),
-        spec_data,
         spec_mask, 
         wavelength=spec_wave,
         line='Hb',
-        filename="test_LPF_A_JD.jpg",
+        filename=f"LPF_mock_{slit_name:03d}.jpg",
+        plot_with=(Amp_0[:, 0], Mu_0[:, 0], sigma1_0[:, 0], sigma2_0[:, 0]), 
+        label_of_plot_with='No noise'
         )
 
-    Amp1     = Amp_JD[:, 0]
-    mu1      = Mu_JD[ :, 0]
-    sigma1_1 = sigma1_JD[:, 0] # First Gaussian, left  wing
-    sigma1_2 = sigma2_JD[:, 0] # First Gaussian, right wing
-    Amp2     = Amp_JD[:, 1]
-    mu2      = Mu_JD[ :, 1]
-    sigma2_1 = sigma1_JD[:, 1] # Second Gaussian, left  wing
-    sigma2_2 = sigma2_JD[:, 1] # Second Gaussian, right wing
+    Amp1     = Amp[:, 0]
+    mu1      = Mu[ :, 0]
+    sigma1_1 = sigma1[:, 0] # First Gaussian, left  wing
+    sigma1_2 = sigma2[:, 0] # First Gaussian, right wing
+    Amp2     = Amp[:, 1]
+    mu2      = Mu[ :, 1]
+    sigma2_1 = sigma1[:, 1] # Second Gaussian, left  wing
+    sigma2_2 = sigma2[:, 1] # Second Gaussian, right wing
     
+    # normalize
     Amp1 /= np.nanmax(Amp1)
     if np.any(Amp2 > 0): Amp2 /= np.nanmax(Amp2)
 
-    # For JD:
+    # mask it to filter out some rows with no signal
     mask = ~np.isnan(Amp1) & ~np.isnan(Amp2)
     Amp1[~mask], Amp2[~mask] = 0, 0
     
@@ -182,7 +283,7 @@ if __name__ == '__main__':
         'std_left':  sigma1_1,
         'std_right': sigma1_2,
         'reliability': mask,
-        'bkg': np.zeros(Amp1.shape) # Pranjal assumed zero bkg
+        'bkg': np.zeros(Amp1.shape)
         }
     LP_line2 = {
         'amp': Amp2,
@@ -190,11 +291,10 @@ if __name__ == '__main__':
         'std_left':  sigma2_1,
         'std_right': sigma2_2,
         'reliability': mask,
-        'bkg': np.zeros(Amp2.shape) # Pranjal assumed zero bkg
+        'bkg': np.zeros(Amp2.shape)
         }
 
     data_info['spec'][0]['meta']['line_profile'] = (LP_line1, LP_line2)
-
 
     # ------------- 2. Load configuration --------------------------- #
     with open(fiduci_yaml, "r", encoding="utf-8") as file1:
@@ -219,58 +319,6 @@ if __name__ == '__main__':
     for par, prior in nautilus_sampler.config.params.prior.items():
         print(par, prior)
     print('slit PA:', data_info['spec'][0]['meta']['slitLPA'])
-
-
-
-
-
-    # fid_params_flat = Parameters._flatten(
-    #     data_info["fid_params"],
-    #     level=1,
-    # )
-    # fid_params_flat['Hb_params-I01_spec1']       = data_info['fid_params']['Hb_params']['I01']
-    # fid_params_flat['Hb_params-bkg_level_spec1'] = data_info['fid_params']['Hb_params']['bkg_level']
-    # fid_params_flat['Hb_params-dx_vel_spec1']    = data_info['fid_params']['Hb_params']['dx_vel']
-    # missing_params = [
-    #     name
-    #     for name in nautilus_sampler.config.params.names
-    #     if name not in fid_params_flat
-    # ]
-
-    # if missing_params:
-    #     print(
-    #         "Cannot build test cube from fid_params. "
-    #         "Missing parameters:"
-    #     )
-    #     for name in missing_params:
-    #         print("  ", name)
-    # else:
-    #     test_cube = np.asarray(
-    #         [
-    #             fid_params_flat[name]
-    #             for name in nautilus_sampler.config.params.names
-    #         ],
-    #         dtype=float,
-    #     )
-
-    #     print("Testing likelihood at fiducial parameters:")
-    #     for name, value in zip(
-    #         nautilus_sampler.config.params.names,
-    #         test_cube,
-    #     ):
-    #         print(f"  {name}: {value}")
-
-    #     nautilus_sampler.check_parallel_loglike(
-    #         cube=test_cube,
-    #         n_workers=None,  # 自动读取 SLURM_CPUS_PER_TASK
-    #         n_repeat=16,
-    #     )
-    # time.sleep(10)
-    # os._exit(0) 
-
-
-
-
 
     # ------------- 3. Start fitting --------------------------- #
     t_start = time.time()
