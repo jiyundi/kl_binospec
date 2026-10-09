@@ -204,7 +204,7 @@ if __name__ == '__main__':
     white_noise = np_random_gen_spec.normal(
         loc=0.0, scale=spec_noise, size=spec_clean.shape
         )
-    spec_noisy = spec_clean + white_noise * 0.25
+    spec_noisy = spec_clean + white_noise
     
     # Check SNR
     from core.spec_snr_estimate import bkg_estimate
