@@ -261,7 +261,7 @@ def make_line_profile_and_exam(data_info, spec_idx, lambda_scale):
     arr = np.where(spec_mask, spec_data, np.nan)
     smoothed = median_filter(arr, size=patch_size)
     
-    from line_width_profile import find_line_sigma, _gaussian_nonzero, _double_gaussian_nonzero
+    from mock_analysis.scripts_Pranjal.line_width_profile import find_line_sigma, _gaussian_nonzero, _double_gaussian_nonzero
     x0_sigma_amp_1, x0_sigma_amp_2 = find_line_sigma( # note: x0_sigma_amp sigmas are now in Angstrom
         smoothed, line_species, lambda_scale, 
         )
