@@ -577,7 +577,7 @@ if __name__ == "__main__":
 
     snr_numerator = np.nansum(image_data) # always positive + a white noise
     snr_denominator_variance = np.nansum(
-        snr_numerator + spec_var
+        snr_numerator + image_var
     )
 
     if snr_denominator_variance > 0:
