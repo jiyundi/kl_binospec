@@ -619,22 +619,16 @@ if __name__ == "__main__":
         size=spec_data.shape,
     )
 
-    spec_noisy = spec_data + white_noise
+    spec_noisy = spec_data + white_noise # bkg subtracted, noisy
 
-    # Estimate the S/N of the noisy spectrum.
     from core.spec_snr_estimate import bkg_estimate
-
     background = bkg_estimate(spec_noisy)[0]
 
-    spec_obs_zero_background = np.where(
-        spec_mask,
-        spec_noisy - background,
-        np.nan,
-    )
-
-    snr_numerator = np.nansum(spec_obs_zero_background)
+    # Estimate the S/N of the noisy spectrum.
+    spec_not_reduced = spec_noisy - background # noisy
+    snr_numerator = np.nansum(spec_noisy)      # bkg subtracted, noisy
     snr_denominator_variance = np.nansum(
-        spec_var + spec_obs_zero_background
+        spec_not_reduced + spec_var
     )
 
     if snr_denominator_variance > 0:
