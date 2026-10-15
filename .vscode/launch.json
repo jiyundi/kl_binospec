@@ -2,15 +2,15 @@
 {
     "version": "0.2.0",
     "configurations": [
-        {
-            "name": "Python: scripts_Pranjal",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${file}",
-            "cwd": "${workspaceFolder}/scripts_Pranjal",
-            "python": "/home/u9/jiyundi/miniconda3/envs/KL-env/bin/python",
-            "console": "integratedTerminal"
-        },
+        // {
+        //     "name": "Python: scripts_Pranjal",
+        //     "type": "debugpy",
+        //     "request": "launch",
+        //     "program": "${file}",
+        //     "cwd": "${workspaceFolder}/scripts_Pranjal",
+        //     "python": "/home/u9/jiyundi/miniconda3/envs/KL-env/bin/python",
+        //     "console": "integratedTerminal"
+        // },
         {
             "name": "Python: klm",
             "type": "debugpy",

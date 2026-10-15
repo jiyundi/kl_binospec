@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 
+# Large fits (raw data)
+obj_counts_slits_lin.fits
+
 # Large fitting outputs
 *.hdf5
 *.h5
