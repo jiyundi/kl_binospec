@@ -63,8 +63,8 @@ import matplotlib.pyplot as plt
 plt.rcParams.update(
     {
         "font.family": "sans-serif",
-        "font.sans-serif": ["Helvetica"],
-        "font.serif": ["Helvetica"],
+        "font.sans-serif": ["Helvetica", "Arial", "DejaVu Sans"],
+        "font.serif": ["Helvetica", "Arial", "DejaVu Sans"],
     }
 )
 
@@ -106,10 +106,10 @@ def plot_image(
     )
 
     ax.set_xlabel(
-        "Increasing RA →" if increasing_ra else "Decreasing RA →"
+        "Increasing RA -->" if increasing_ra else "Decreasing RA -->"
     )
     ax.set_ylabel(
-        "Increasing Dec →" if increasing_dec else "Decreasing Dec →"
+        "Increasing Dec -->" if increasing_dec else "Decreasing Dec -->"
     )
 
     fig.colorbar(image, ax=ax)
