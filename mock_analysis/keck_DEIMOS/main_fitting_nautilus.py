@@ -506,13 +506,14 @@ if __name__ == "__main__":
         np.nansum(spec_data_no_noise)
         / np.sqrt(np.nansum(spec_data_no_noise))
     )
-    print("Image S/N without noise =", image_snr)
-    print("Spec  S/N without noise =", spec_snr )
+    print("Image S/N without noise =", round(image_snr, 1))
+    print("Spec  S/N without noise =", round(spec_snr,  1))
 
     # -----------------------------------------------------------------------
     # 1.1 Add realistic image conditions
     # -----------------------------------------------------------------------
 
+    print('\n------------------------------------------------------------')
     print("CAUTION: adding realistic observational effects to raw data.")
 
     image_random_generator = np.random.default_rng(seed=slit_id)
@@ -586,7 +587,7 @@ if __name__ == "__main__":
             snr_numerator
             / np.sqrt(snr_denominator_variance)
         )
-        print("Image S/N after adding noise =", image_snr)
+        print("Image S/N after adding noise =", f'{image_snr:.1f}', f'(BKG 1-sigma: {np.mean(image_var**0.5):.1f})')
     else:
         print(
             "WARNING: image S/N could not be calculated because "
@@ -600,6 +601,8 @@ if __name__ == "__main__":
     spec_data = data_info["spec"][0]["data"]
     spec_mask = data_info["spec"][0]["mask"]
     spec_var = data_info["spec"][0]["var"]
+    print('image_var**0.5:\n', image_var**0.5)
+    print('spec_var**0.5:\n', spec_var**0.5)
     spec_wave = data_info["spec"][0]["meta"]["lambda_grid"]
 
     plot_spectrum(
@@ -636,7 +639,7 @@ if __name__ == "__main__":
             snr_numerator
             / np.sqrt(snr_denominator_variance)
         )
-        print("Spectrum S/N after adding noise =", spec_snr)
+        print("Spectrum S/N after adding noise =", f'{spec_snr:.1f}', f'(BKG 1-sigma: {np.mean(spec_var**0.5):.1f}, BKG level: {background:.1f})')
     else:
         print(
             "WARNING: spectrum S/N could not be calculated because "
@@ -663,6 +666,8 @@ if __name__ == "__main__":
 
     # Remove the existing line-profile representation before replacing it.
     data_info["spec"][0]["meta"].pop("line_profile", None)
+
+    print('------------------------------------------------------------\n')
 
     # -----------------------------------------------------------------------
     # 1.3 Extract the asymmetric H-beta line profiles
