@@ -4,6 +4,7 @@ __pycache__/
 
 # Large fits (raw data)
 obj_counts_slits_lin.fits
+obj_counts_err_slits_lin.fits
 
 # Large fitting outputs
 *.hdf5

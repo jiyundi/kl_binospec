@@ -492,8 +492,21 @@ if __name__ == "__main__":
         data_info["fid_params"]["shared_params"]["cosi"],
     )
 
-    # Save the original spectrum before adding observational noise.
-    spec_data_no_noise = data_info["spec"][0]["data"].copy()
+    # Save the original data before adding observational noise.
+    image_data_no_noise = data_info["image"]["data"].copy()
+    spec_data_no_noise  = data_info["spec"][0]["data"].copy()
+
+    # Print noise-free SNRs
+    image_snr = (
+        np.nansum(image_data_no_noise)
+        / np.sqrt(np.nansum(image_data_no_noise))
+    )
+    spec_snr = (
+        np.nansum(spec_data_no_noise)
+        / np.sqrt(np.nansum(spec_data_no_noise))
+    )
+    print("Image S/N without noise =", image_snr)
+    print("Spec  S/N without noise =", spec_snr )
 
     # -----------------------------------------------------------------------
     # 1.1 Add realistic image conditions
@@ -562,6 +575,23 @@ if __name__ == "__main__":
         increasing_dec=increasing_dec,
     )
 
+    snr_numerator = np.nansum(image_data) # always positive + a white noise
+    snr_denominator_variance = np.nansum(
+        snr_numerator + spec_var
+    )
+
+    if snr_denominator_variance > 0:
+        image_snr = (
+            snr_numerator
+            / np.sqrt(snr_denominator_variance)
+        )
+        print("Image S/N after adding noise =", image_snr)
+    else:
+        print(
+            "WARNING: image S/N could not be calculated because "
+            "the denominator is non-positive."
+        )
+
     # -----------------------------------------------------------------------
     # 1.2 Add realistic spectral conditions
     # -----------------------------------------------------------------------
@@ -602,14 +632,14 @@ if __name__ == "__main__":
     )
 
     snr_numerator = np.nansum(spec_obs_zero_background)
-    snr_denominator_squared = np.nansum(
+    snr_denominator_variance = np.nansum(
         spec_var + spec_obs_zero_background
     )
 
-    if snr_denominator_squared > 0:
+    if snr_denominator_variance > 0:
         spec_snr = (
             snr_numerator
-            / np.sqrt(snr_denominator_squared)
+            / np.sqrt(snr_denominator_variance)
         )
         print("Spectrum S/N after adding noise =", spec_snr)
     else:
