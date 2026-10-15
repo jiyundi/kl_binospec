@@ -63,8 +63,8 @@ import matplotlib.pyplot as plt
 plt.rcParams.update(
     {
         "font.family": "sans-serif",
-        "font.sans-serif": ["Helvetica", "Arial", "DejaVu Sans"],
-        "font.serif": ["Helvetica", "Arial", "DejaVu Sans"],
+        "font.sans-serif": ["Helvetica"],
+        "font.serif": ["Helvetica"],
     }
 )
 
@@ -494,7 +494,8 @@ if __name__ == "__main__":
 
     # Save the original data before adding observational noise.
     image_data_no_noise = data_info["image"]["data"].copy()
-    spec_data_no_noise  = data_info["spec"][0]["data"].copy()
+    spec_data_no_noise  = data_info["spec"][0]["data"].copy() \
+                        - data_info["fid_params"]["Hb_params"]["bkg_level"]
 
     # Print noise-free SNRs
     image_snr = (
