@@ -624,7 +624,7 @@ if __name__ == "__main__":
 
     spec_noisy = spec_data + white_noise # bkg subtracted, noisy
 
-    from core.spec_snr_estimate import bkg_estimate
+    from diagnostics.spec_snr_estimate import bkg_estimate
     background = bkg_estimate(spec_noisy)[0]
 
     # Estimate the S/N of the noisy spectrum.
