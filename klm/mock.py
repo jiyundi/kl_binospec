@@ -92,17 +92,18 @@ class Mock:
         scaled_snr = lambda _, scale: cls._calculate_snr(data, var*scale, data_type)
 
         if data_type=='spec':
-            # scale = scipy.optimize.curve_fit(scaled_snr, [1], [snr], bounds=(0, 100))[0][0]
-            
-            # Added by JD. 
-            # Comments: 
-            #     In your code, `scaled_snr` is actually independent of the 
+            # Hint: `scaled_snr` is actually independent of the 
             # variable, so directly using `curve_fit` is unnecessary. The key 
             # is to optimize the parameter `scale`, and the simplest approach 
             # is to use `minimize_scalar`.
+
+            # scale = scipy.optimize.curve_fit(scaled_snr, [1], [snr], bounds=(0, 100))[0][0]
+            
             def objective(scale):
                 return (cls._calculate_snr(data, var * scale, data_type) - snr) ** 2
+            
             from scipy.optimize import minimize_scalar
+            
             result = minimize_scalar(objective, bounds=(0, 100), method='bounded')
             scale = result.x
 
