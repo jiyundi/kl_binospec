@@ -286,64 +286,66 @@ if __name__ == "__main__":
     # -------------------------------------------------
     import joblib
     import matplotlib.pyplot as plt
+    
+    try:
+        result_array = np.loadtxt('spec_snr_table.csv', delimiter=',')
+    
+    except FileNotFoundError:
+        records = []
+    
+        for slit_num in range(143):
+            filepath = f"../scripts/binospec_pkl/pkl/slit_{slit_num:03d}.pkl"
+    
+            try:
+                with open(filepath, "rb") as file:
+                    data_info = joblib.load(file)
+            except FileNotFoundError:
+                print(f"文件不存在，跳过：{filepath}")
+                continue
+    
+            for spec_idx, spec in enumerate(data_info["spec"]):
+                pkl_flux    = spec["data"]
+                pkl_bkg_var = spec["var"]
+                pkl_mask    = spec["mask"]
+    
+                background = bkg_estimate(pkl_flux[pkl_mask])[0]
+    
+                spec_snr = (
+                    np.nansum(pkl_flux[pkl_mask])
+                    / np.sqrt(np.nansum((pkl_flux[pkl_mask] - background) + pkl_bkg_var[pkl_mask]))
+                )
+    
+                records.append(
+                    (slit_num, spec_idx, round(spec_snr, 1), round(background, 1), round(np.mean(pkl_bkg_var**0.5), 1))
+                )
+    
+        # 转换为带字段名的 NumPy 结构化数组
+        result_array = np.array(
+            records,
+            dtype=[
+                ("slit_num", np.int32),
+                ("spec_idx", np.int32),
+                ("spec_snr", np.float64),
+                ("spec_bkg", np.float64),
+                ("spec_var", np.float64),
+            ],
+        )
 
-    records = []
-
-    for slit_num in range(143):
-        filepath = f"../scripts/binospec_pkl/pkl/slit_{slit_num:03d}.pkl"
-
-        try:
-            with open(filepath, "rb") as file:
-                data_info = joblib.load(file)
-        except FileNotFoundError:
-            print(f"文件不存在，跳过：{filepath}")
-            continue
-
-        for spec_idx, spec in enumerate(data_info["spec"]):
-            pkl_flux    = spec["data"]
-            pkl_bkg_var = spec["var"]
-            pkl_mask    = spec["mask"]
-
-            background = bkg_estimate(pkl_flux[pkl_mask])[0]
-
-            spec_snr = (
-                np.nansum(pkl_flux[pkl_mask])
-                / np.sqrt(np.nansum((pkl_flux[pkl_mask] - background) + pkl_bkg_var[pkl_mask]))
-            )
-
-            records.append(
-                (slit_num, spec_idx, f'{spec_snr:>5.0f}', round(background, 1), round(np.mean(pkl_bkg_var**0.5), 1))
-            )
-
-    # 转换为带字段名的 NumPy 结构化数组
-    result_array = np.array(
-        records,
-        dtype=[
-            ("slit_num", np.int32),
-            ("spec_idx", np.int32),
-            ("spec_snr", np.float64),
-            ("spec_bkg", np.float64),
-            ("spec_var", np.float64),
-        ],
-    )
+        # 可选：保存数组
+        np.savetxt('spec_snr_table.csv', result_array, delimiter=',')
 
     print(result_array)
     print(f"总光谱数量：{len(result_array)}")
 
-    # 可分别通过字段名访问
-    print(result_array["slit_num"])
-    print(result_array["spec_idx"])
-    print(result_array["spec_snr"])
-
-    # 可选：保存数组
-    np.save("spec_snr_results.npy", result_array)
-
     # 删除 NaN 和 Inf，避免影响直方图
-    snr_values = result_array["spec_snr"]
+    try:
+        snr_values = result_array["spec_snr"]
+    except IndexError:
+        snr_values = result_array[:, 2]
     snr_values = snr_values[np.isfinite(snr_values)]
 
     # 绘制 spec_snr 直方图
-    plt.figure(figsize=(9, 6))
+    plt.figure(figsize=(3, 3))
     plt.hist(
         snr_values,
         bins=30,
