@@ -12,5 +12,5 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["klm*", "core*", "summary*", "data_prep*"]
-exclude = ["archived*", "diagnostics*", "visualization*"]
+include = ["klm*", "core*", "summary*", "data_prep*", "diagnostics*"]
+exclude = ["archived*", "visualization*"]
