@@ -587,7 +587,7 @@ if __name__ == "__main__":
             snr_numerator
             / np.sqrt(snr_denominator_variance)
         )
-        print("Image S/N after adding noise =", f'{image_snr:.1f}', f'(BKG 1-sigma: {np.mean(image_var**0.5):.1f})')
+        print("Image S/N after adding noise =", f'{image_snr:.1f}', f'(BKG 1-sigma: {np.mean(image_var**0.5):.1f}) <--------------------------------------------------')
     else:
         print(
             "WARNING: image S/N could not be calculated because "
@@ -629,7 +629,7 @@ if __name__ == "__main__":
 
     # Estimate the S/N of the noisy spectrum.
     spec_not_reduced = spec_noisy - background # noisy
-    snr_numerator = np.nansum(spec_noisy)      # bkg subtracted, noisy
+    snr_numerator = np.nansum(spec_not_reduced)      # bkg subtracted, noisy???
     snr_denominator_variance = np.nansum(
         spec_not_reduced + spec_var
     )
@@ -639,12 +639,13 @@ if __name__ == "__main__":
             snr_numerator
             / np.sqrt(snr_denominator_variance)
         )
-        print("Spectrum S/N after adding noise =", f'{spec_snr:.1f}', f'(BKG 1-sigma: {np.mean(spec_var**0.5):.1f}, BKG level: {background:.1f})')
+        print("Spectrum S/N after adding noise =", f'{spec_snr:.1f}', f'(BKG 1-sigma: {np.mean(spec_var**0.5):.1f}, BKG level: {background:.1f}) <--------------------------------------------------')
     else:
         print(
             "WARNING: spectrum S/N could not be calculated because "
             "the denominator is non-positive."
         )
+    os._exit(0)
 
     # Install the noisy spectrum in data_info.
     data_info["spec"][0]["data"] = spec_noisy
