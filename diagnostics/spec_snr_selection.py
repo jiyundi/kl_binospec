@@ -3,7 +3,7 @@ import joblib
 import numpy as np
 import matplotlib.pyplot as plt
 
-from core.spec_snr_estimate import bkg_estimate
+from spec_snr_estimate import bkg_estimate
 
 # --------------------------------------------------
 # 1. 读取所有光谱、mask 和 SNR
@@ -77,6 +77,17 @@ negative_spectra = [
     if np.isfinite(record["spec_snr"])
     and record["spec_snr"] < 0
 ]
+
+# 按照 SNR 从大到小排序
+positive_spectra.sort(
+    key=lambda record: record["spec_snr"],
+    reverse=True,
+)
+
+negative_spectra.sort(
+    key=lambda record: record["spec_snr"],
+    reverse=True,
+)
 
 nan_snr_count = sum(
     not np.isfinite(record["spec_snr"])
@@ -298,7 +309,7 @@ def plot_2d_spectra_grid(
 plot_2d_spectra_grid(
     positive_spectra,
     title="2D Spectra with SNR >= 0",
-    output_file="spectra_2d_snr_ge_0.png",
+    output_file="spectra_2d_snr_ge_0_standard.png",
     max_figsize=20,
     dpi=100,
 )
@@ -306,7 +317,7 @@ plot_2d_spectra_grid(
 plot_2d_spectra_grid(
     negative_spectra,
     title="2D Spectra with SNR < 0",
-    output_file="spectra_2d_snr_lt_0.png",
+    output_file="spectra_2d_snr_lt_0_standard.png",
     max_figsize=20,
     dpi=100,
 )

@@ -311,7 +311,7 @@ if __name__ == "__main__":
                 background = bkg_estimate(pkl_flux[pkl_mask])[0]
     
                 spec_snr = (
-                    np.nansum(pkl_flux[pkl_mask])
+                    np.nansum(pkl_flux[pkl_mask] - background)
                     / np.sqrt(np.nansum((pkl_flux[pkl_mask] - background) + pkl_bkg_var[pkl_mask]))
                 )
     
