@@ -57,8 +57,21 @@ def main():
                 print(f"警告: {s_dir} 中缺失 {fname}，跳过该图。")
                 continue
 
-            img = Image.open(img_path).convert("RGB")
-            images_to_convert.append(img)
+            with Image.open(img_path) as im:
+                img = im.convert("RGB")
+
+            # 第一张图片决定目标宽度
+            if not images_to_convert:
+                target_width = img.width
+            else:
+                # 按第一张图片宽度等比例缩放
+                new_height = round(img.height * target_width / img.width)
+                img = img.resize(
+                    (target_width, new_height),
+                    Image.Resampling.LANCZOS
+                )
+
+images_to_convert.append(img)
 
     if not images_to_convert:
         print("没有找到可用于合并的图片！")
