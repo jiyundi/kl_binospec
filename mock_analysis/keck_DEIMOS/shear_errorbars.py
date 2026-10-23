@@ -56,11 +56,11 @@ def weighted_quantile(x, quantiles, weights):
 
 
 
-colors = ['royalblue', 'darkorange', 'crimson', 'limegreen']
-ylims  = [(-0.25, 0.25), (-0.8, 0.8)]
+colors = ['black', 'crimson', 'royalblue', 'darkorange', 'limegreen']
+ylims  = [(-0.25, 0.25)] #, (-0.8, 0.8)
 
-pars_to_plot = ['gamma_t', 'theta_int'] #
-runs_folders = ['runs_noisy_snr20/', 'runs_noisy_snr15/', 'runs_noisy_snr10/']
+pars_to_plot = ['gamma_t'] #, 'theta_int'
+runs_folders = ['runs_no_noise/', 'runs_noisy/']
 slit_names  = np.arange(0, 11)
 
 # Specify x-axis

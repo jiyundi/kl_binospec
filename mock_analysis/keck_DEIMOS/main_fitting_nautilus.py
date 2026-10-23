@@ -560,7 +560,7 @@ if __name__ == "__main__":
         image_data,
         image_mask,
         n_circles=5,
-        radius_range=(2, 16),
+        radius_range=(2, 6),
         avoid_center=5,
         random_generator=image_random_generator,
     )
@@ -601,8 +601,6 @@ if __name__ == "__main__":
     spec_data = data_info["spec"][0]["data"]
     spec_mask = data_info["spec"][0]["mask"]
     spec_var = data_info["spec"][0]["var"]
-    print('image_var**0.5:\n', image_var**0.5)
-    print('spec_var**0.5:\n', spec_var**0.5)
     spec_wave = data_info["spec"][0]["meta"]["lambda_grid"]
 
     plot_spectrum(
@@ -628,8 +626,8 @@ if __name__ == "__main__":
     background = bkg_estimate(spec_noisy)[0]
 
     # Estimate the S/N of the noisy spectrum.
-    spec_not_reduced = spec_noisy - background # noisy
-    snr_numerator = np.nansum(spec_not_reduced)      # bkg subtracted, noisy???
+    spec_not_reduced = spec_noisy - background  # noisy
+    snr_numerator = np.nansum(spec_not_reduced) # bkg subtraction restored, noisy
     snr_denominator_variance = np.nansum(
         spec_not_reduced + spec_var
     )
@@ -645,10 +643,9 @@ if __name__ == "__main__":
             "WARNING: spectrum S/N could not be calculated because "
             "the denominator is non-positive."
         )
-    os._exit(0)
 
     # Install the noisy spectrum in data_info.
-    data_info["spec"][0]["data"] = spec_noisy
+    data_info["spec"][0]["data"] = spec_noisy # bkg subtracted, noisy
     spec_data = data_info["spec"][0]["data"]
 
     # Update the spectral mask.
@@ -656,7 +653,7 @@ if __name__ == "__main__":
     spec_mask &= spec_data + spec_var > 0
 
     plot_spectrum(
-        spec_data,
+        spec_noisy,
         spec_mask,
         wave=spec_wave,
         plotname=(
@@ -669,6 +666,8 @@ if __name__ == "__main__":
     data_info["spec"][0]["meta"].pop("line_profile", None)
 
     print('------------------------------------------------------------\n')
+    
+    # os._exit(0)
 
     # -----------------------------------------------------------------------
     # 1.3 Extract the asymmetric H-beta line profiles
