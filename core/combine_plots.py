@@ -71,7 +71,7 @@ def main():
                     Image.Resampling.LANCZOS
                 )
 
-images_to_convert.append(img)
+            images_to_convert.append(img)
 
     if not images_to_convert:
         print("没有找到可用于合并的图片！")
