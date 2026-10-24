@@ -2,8 +2,6 @@ import numpy as np
 from scipy.optimize import brentq
 
 from core.find_snr import snr_estimate
-
-# 请替换成 bkg_estimate 的实际导入路径
 from core.find_bkg import bkg_estimate
 
 

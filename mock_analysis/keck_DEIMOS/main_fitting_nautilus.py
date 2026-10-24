@@ -45,6 +45,7 @@ from scipy.stats import gaussian_kde
 from core.fitting_result_utils import complete_flattened_fit_params
 from core.make_config_dic import make_config_dic
 from core.post_fitting import plot_obs_fit_res
+from core.find_snr import snr_estimate
 from klm.line_profile_extraction import (
     exam_line_profile_A,
     extract_asymmetric_lpf_A,
@@ -522,6 +523,7 @@ if __name__ == "__main__":
     image_data = data_info["image"]["data"]
     image_mask = data_info["image"]["mask"]
     image_var = data_info["image"]["var"]
+    print(snr_estimate(image_data, bkg_is_subtracted=False, data_is_noisy=False))
 
     # Determine the displayed sky-coordinate directions from the image WCS.
     image_wcs = data_info["image"]["meta"]["wcs"]
@@ -579,7 +581,7 @@ if __name__ == "__main__":
 
     snr_numerator = np.nansum(image_data) # always positive + a white noise
     snr_denominator_variance = np.nansum(
-        snr_numerator + image_var
+        image_data + image_var
     )
 
     if snr_denominator_variance > 0:
@@ -593,6 +595,9 @@ if __name__ == "__main__":
             "WARNING: image S/N could not be calculated because "
             "the denominator is non-positive."
         )
+
+    print(snr_estimate(image_data, bkg_is_subtracted=False, 
+                       data_is_noisy=True, noise_var=np.mean(image_noise)**2))
 
     # -----------------------------------------------------------------------
     # 1.2 Add realistic spectral conditions
