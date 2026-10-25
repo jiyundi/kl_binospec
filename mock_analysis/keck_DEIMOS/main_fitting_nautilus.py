@@ -45,7 +45,9 @@ from scipy.stats import gaussian_kde
 from core.fitting_result_utils import complete_flattened_fit_params
 from core.make_config_dic import make_config_dic
 from core.post_fitting import plot_obs_fit_res
+from core.find_bkg import bkg_estimate
 from core.find_snr import snr_estimate
+from core.var_snr_match import find_background_variance
 from klm.line_profile_extraction import (
     exam_line_profile_A,
     extract_asymmetric_lpf_A,
@@ -493,19 +495,16 @@ if __name__ == "__main__":
         data_info["fid_params"]["shared_params"]["cosi"],
     )
 
-    # Save the original data before adding observational noise.
-    image_data_no_noise = data_info["image"]["data"].copy()
-    spec_data_no_noise  = data_info["spec"][0]["data"].copy() \
-                        - data_info["fid_params"]["Hb_params"]["bkg_level"]
-
     # Print noise-free SNRs
-    image_snr = (
-        np.nansum(image_data_no_noise)
-        / np.sqrt(np.nansum(image_data_no_noise))
+    image_snr = snr_estimate(
+        data_info["image"]["data"], 
+        bkg_is_subtracted=False, data_is_noisy=False
     )
-    spec_snr = (
-        np.nansum(spec_data_no_noise)
-        / np.sqrt(np.nansum(spec_data_no_noise))
+    spec_snr  = snr_estimate(
+        data_info["spec"][0]["data"], 
+        restore_CCD_flux=True,
+        mock_bkg=data_info["fid_params"]["Hb_params"]["bkg_level"], 
+        bkg_is_subtracted=True, data_is_noisy=False
     )
     print("Image S/N without noise =", round(image_snr, 1))
     print("Spec  S/N without noise =", round(spec_snr,  1))
@@ -522,9 +521,7 @@ if __name__ == "__main__":
 
     image_data = data_info["image"]["data"]
     image_mask = data_info["image"]["mask"]
-    image_var = data_info["image"]["var"]
-    print(snr_estimate(image_data, bkg_is_subtracted=False, data_is_noisy=False))
-
+    
     # Determine the displayed sky-coordinate directions from the image WCS.
     image_wcs = data_info["image"]["meta"]["wcs"]
     increasing_ra = image_wcs.cd[0, 0] > 0
@@ -539,6 +536,12 @@ if __name__ == "__main__":
     )
 
     # Add independent Gaussian noise to the image.
+    target_snr = 40
+    image_var = np.ones(image_data.shape) * find_background_variance(
+        image_data,
+        bkg_is_subtracted=False,
+        target_snr=target_snr
+    )
     image_noise = np.sqrt(
         np.clip(image_var, a_min=0.0, a_max=None)
     )
@@ -557,55 +560,41 @@ if __name__ == "__main__":
         increasing_dec=increasing_dec,
     )
 
-    # Mask five synthetic neighboring objects.
-    image_mask[:] = circular_maskout(
-        image_data,
-        image_mask,
-        n_circles=5,
-        radius_range=(2, 6),
-        avoid_center=5,
-        random_generator=image_random_generator,
-    )
+    # # Mask five synthetic neighboring objects.
+    # image_mask[:] = circular_maskout(
+    #     image_data,
+    #     image_mask,
+    #     n_circles=5,
+    #     radius_range=(2, 6),
+    #     avoid_center=5,
+    #     random_generator=image_random_generator,
+    # )
 
     # Remove non-finite pixels and pixels that fail the positivity condition.
     image_mask &= np.isfinite(image_data)
     image_mask &= image_data + image_var > 0
 
-    plot_image(
-        image_data,
-        image_mask,
-        plotname=diagnostic_folder / "image_after_masking.png",
-        increasing_ra=increasing_ra,
-        increasing_dec=increasing_dec,
+    # plot_image(
+    #     image_data,
+    #     image_mask,
+    #     plotname=diagnostic_folder / "image_after_masking.png",
+    #     increasing_ra=increasing_ra,
+    #     increasing_dec=increasing_dec,
+    # )
+
+    # Estimate the S/N of the noisy image.
+    image_snr = snr_estimate(
+        data_info["image"]["data"], 
+        bkg_is_subtracted=False, data_is_noisy=True, noise_var=np.mean(image_noise)**2
     )
-
-    snr_numerator = np.nansum(image_data) # always positive + a white noise
-    snr_denominator_variance = np.nansum(
-        image_data + image_var
-    )
-
-    if snr_denominator_variance > 0:
-        image_snr = (
-            snr_numerator
-            / np.sqrt(snr_denominator_variance)
-        )
-        print("Image S/N after adding noise =", f'{image_snr:.1f}', f'(BKG 1-sigma: {np.mean(image_var**0.5):.1f}) <--------------------------------------------------')
-    else:
-        print(
-            "WARNING: image S/N could not be calculated because "
-            "the denominator is non-positive."
-        )
-
-    print(snr_estimate(image_data, bkg_is_subtracted=False, 
-                       data_is_noisy=True, noise_var=np.mean(image_noise)**2))
-
+    print("Image S/N after noise =", round(image_snr, 1))
+    
     # -----------------------------------------------------------------------
     # 1.2 Add realistic spectral conditions
     # -----------------------------------------------------------------------
 
     spec_data = data_info["spec"][0]["data"]
     spec_mask = data_info["spec"][0]["mask"]
-    spec_var = data_info["spec"][0]["var"]
     spec_wave = data_info["spec"][0]["meta"]["lambda_grid"]
 
     plot_spectrum(
@@ -615,6 +604,14 @@ if __name__ == "__main__":
         plotname=diagnostic_folder / "spectrum_before_noise.png",
     )
 
+    # Add independent Gaussian noise to the spec.
+    target_snr = 30
+    spec_var = np.ones(spec_data.shape) * find_background_variance(
+        spec_data,
+        bkg_is_subtracted=True,
+        target_snr=target_snr,
+        mock_bkg=data_info["fid_params"]["Hb_params"]["bkg_level"]
+    )
     spec_noise = np.sqrt(
         np.clip(spec_var, a_min=0.0, a_max=None)
     )
@@ -626,28 +623,7 @@ if __name__ == "__main__":
     )
 
     spec_noisy = spec_data + white_noise # bkg subtracted, noisy
-
-    from diagnostics.spec_snr_estimate import bkg_estimate
-    background = bkg_estimate(spec_noisy)[0]
-
-    # Estimate the S/N of the noisy spectrum.
-    spec_not_reduced = spec_noisy - background  # noisy
-    snr_numerator = np.nansum(spec_not_reduced) # bkg subtraction restored, noisy
-    snr_denominator_variance = np.nansum(
-        spec_not_reduced + spec_var
-    )
-
-    if snr_denominator_variance > 0:
-        spec_snr = (
-            snr_numerator
-            / np.sqrt(snr_denominator_variance)
-        )
-        print("Spectrum S/N after adding noise =", f'{spec_snr:.1f}', f'(BKG 1-sigma: {np.mean(spec_var**0.5):.1f}, BKG level: {background:.1f}) <--------------------------------------------------')
-    else:
-        print(
-            "WARNING: spectrum S/N could not be calculated because "
-            "the denominator is non-positive."
-        )
+    # background = bkg_estimate(spec_noisy)[0]
 
     # Install the noisy spectrum in data_info.
     data_info["spec"][0]["data"] = spec_noisy # bkg subtracted, noisy
@@ -663,17 +639,24 @@ if __name__ == "__main__":
         wave=spec_wave,
         plotname=(
             diagnostic_folder
-            / "spectrum_after_noise_and_masking.png"
+            / "spectrum_after_noise.png"
         ),
     )
+
+    # Estimate the S/N of the noisy spectrum.
+    spec_snr = snr_estimate(
+        data_info["spec"][0]["data"],
+        bkg_is_subtracted=True, restore_CCD_flux=True,
+        mock_bkg=data_info["fid_params"]["Hb_params"]["bkg_level"], 
+        data_is_noisy=True, noise_var=np.mean(spec_noise)**2
+    )
+    print("Spec  S/N after noise =", round(spec_snr,  1))
 
     # Remove the existing line-profile representation before replacing it.
     data_info["spec"][0]["meta"].pop("line_profile", None)
 
     print('------------------------------------------------------------\n')
     
-    # os._exit(0)
-
     # -----------------------------------------------------------------------
     # 1.3 Extract the asymmetric H-beta line profiles
     # -----------------------------------------------------------------------
@@ -681,7 +664,7 @@ if __name__ == "__main__":
     # Reference line profile from the noise-free spectrum.
     amp_reference, mean_reference, sigma_left_reference, \
         sigma_right_reference = extract_asymmetric_lpf_A(
-            spec_data_no_noise,
+            data_info["spec"][0]["data"] - data_info["fid_params"]["Hb_params"]["bkg_level"],
             spec_wave,
             line="Hb",
         )
@@ -767,6 +750,8 @@ if __name__ == "__main__":
         line_profile_1,
         line_profile_2,
     )
+
+    # os._exit(0)
 
     # -----------------------------------------------------------------------
     # 2. Load the fitting configuration

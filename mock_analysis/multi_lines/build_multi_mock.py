@@ -20,7 +20,8 @@ plt.rcParams.update({
     "font.sans-serif": "Helvetica",
     "font.serif": "Helvetica",
 })
-    
+
+
 def prepare_an_image(RA_obj, Dec_obj):
     """
         Make a dic for image data
@@ -47,29 +48,32 @@ def prepare_an_image(RA_obj, Dec_obj):
     
     return meta_image
 
-def prepare_a_slitspec(RA_obj, Dec_obj, Set, line, meta_gal):
+def prepare_a_slitspec(RA_obj, Dec_obj, Set, line, meta_gal, idx_line=0):
     """
         Make a dic for slit data
     """
     # slit_len   =  8
     slit_width =  1
     slit_LPA   =  25 #+ 90*u.deg
-    spec_pix_scale  = 0.24      # arcsec/pix by Binospec
-    spec_shape      = [22, 20]  # (spatial pixels, N wavelength points)
+    spec_pix_scale  = 0.24     # arcsec/pix by Binospec
+    spec_shape      = [20, 40] # (spatial pixels, N wavelength points)
     
     # Only select one from these 3 RA-Dec settings
     if   Set == 'C':
         # (1) Set C
         slit_RA    = RA_obj
         slit_Dec   = Dec_obj
+        idx_lpf    = idx_line * 3 + 1
     elif Set == 'A':
         # (2) Set A ONLY: 1 arcsec offset (from Set C slit)
         slit_RA    = RA_obj  - slit_width*u.arcsec * np.cos(slit_LPA)
         slit_Dec   = Dec_obj + slit_width*u.arcsec * np.sin(slit_LPA)
+        idx_lpf    = idx_line * 3 + 0
     elif Set == 'B':
         # (3) Set B ONLY: -1 arcsec offset
         slit_RA    = RA_obj  + slit_width*u.arcsec * np.cos(slit_LPA)
         slit_Dec   = Dec_obj - slit_width*u.arcsec * np.sin(slit_LPA)
+        idx_lpf    = idx_line * 3 + 2
     elif Set == 'P':
         # (4) Crossed slit: 90 degree to original slit PA
         slit_RA    = RA_obj
@@ -93,8 +97,22 @@ def prepare_a_slitspec(RA_obj, Dec_obj, Set, line, meta_gal):
     lamb_disp    = 0.61 * u.Angstrom # A/px
     LAMBDA_1D    = utils.build_1d_grid(spec_shape[1], lamb_disp) + lamb_0
     lambda_grid  = np.repeat([LAMBDA_1D], spec_shape[0], axis=0) * LAMBDA_1D.unit
+
+    # Optional: 
+    lpf_filenames = [
+        '../../scripts/binospec_pkl/LPF_slit_109_3.pkl', 
+        '../../scripts/binospec_pkl/LPF_slit_109_4.pkl', 
+        '../../scripts/binospec_pkl/LPF_slit_109_5.pkl', 
+        '../../scripts/binospec_pkl/LPF_slit_128_3.pkl', 
+        '../../scripts/binospec_pkl/LPF_slit_128_4.pkl', 
+        '../../scripts/binospec_pkl/LPF_slit_128_5.pkl', 
+    ]
+    with open(lpf_filenames[idx_lpf], "rb") as f:
+        line_profile_1, line_profile_2 = joblib.load(f)
+
     meta_spec = {
         'line_species':   line, 
+        'line_profile':   (line_profile_1, line_profile_2),
         'ngrid':          spec_shape,
         'lambda_grid':    lambda_grid, # nm, or *u.Angstrom,
         'pixScale':       spec_pix_scale,  # arcsec/px
@@ -124,7 +142,7 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
     for i, line in enumerate(emi_line_lst):
         meta_spec = prepare_a_slitspec(meta_gal['RA'], 
                                        meta_gal['Dec'], 
-                                       Set, line, meta_gal)
+                                       Set, line, meta_gal, idx_line=i)
         
         # Replace 'line' with 'O2_params', 'Ha_params', etc
         mock_params_keys, mock_params_deletedkeys = [], []
@@ -149,13 +167,14 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
         this_line_dict  = {**updated_dict['shared_params'], 
                            **updated_dict[f'{line}_params']} # merge dict
         spec_data       = spec_model.get_observable(this_line_dict)
-        cont_vertical   = np.exp(
-            -np.abs(np.arange(spec_data.shape[0]) - spec_data.shape[0]/2)**2 / 10
-            ) * np.std(spec_data)
-        cont_model_spec = np.tile(np.array([cont_vertical]).T, 
-                                  (1, spec_data.shape[1])
-                                  # (spec_data.shape[1], 1)
-                                  )
+        # cont_vertical   = np.exp(
+        #     -np.abs(np.arange(spec_data.shape[0]) - spec_data.shape[0]/2)**2 / 10
+        #     ) * np.std(spec_data)
+        # cont_model_spec = np.tile(np.array([cont_vertical]).T, 
+        #                           (1, spec_data.shape[1])
+        #                           # (spec_data.shape[1], 1)
+        #                           )
+        cont_model_spec = np.zeros(spec_data.shape)
         spec_var        = np.ones(spec_data.shape) * 100
         spec_var        = Mock._set_snr(spec_data, spec_var, # Set var to match SNR
                                         mock_params['shared_params-spec_snr'], 
@@ -318,9 +337,9 @@ if __name__ == '__main__':
         To protect them, only when directly execute this script,
         the variables below will then be executed.
     """
-    mock_folder = 'binospec_multi_mock/'
-    slitname = 3
-    lines = ['O2','Hb']
+    mock_folder = 'mock_pkl/'
+    slitname = 0
+    lines = ['Hb','Ha']
     
     thetalist = np.array([0, 30, 60, 90, 120, 150])/(180/np.pi)
     cosi_list = np.array([0.1, 0.3, 0.5, 0.7, 0.9])
@@ -334,7 +353,6 @@ if __name__ == '__main__':
             iternum = iternums[i, j]
             update_dict['shared_params-theta_int'] = thetalist[i]
             update_dict['shared_params-cosi']      = cosi_list[j]
-            # update_dict['shared_params-vscale']    = cosi_list[j]
             
             make_mock_3slits_multi(
                 emi_line_lst=lines, slitname=slitname, iter_num=iternum, 

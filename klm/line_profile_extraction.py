@@ -1161,3 +1161,85 @@ def add_colorbar_by_alpha(plt, fig, ax, color, label='label', bar_low=0, bar_hig
     cbar = fig.colorbar(sm, ax=ax, label=label)
     
     return cbar
+
+
+if __name__ == "__main__":
+    import joblib
+    from pathlib import Path
+
+    slitnum, spec_idx = 109, 3
+
+    data_info_path = Path(f"../scripts/binospec_pkl/pkl/slit_{slitnum}.pkl")
+    with data_info_path.open("rb") as file:
+        data_info = joblib.load(file)
+
+    # Line profile extracted from the noisy spectrum.
+    amp, mean, sigma_left, sigma_right = extract_asymmetric_lpf_A(
+        data_info["spec"][spec_idx]["data"],
+        data_info["spec"][spec_idx]["meta"]["lambda_grid"],
+        line="Ha",
+    )
+
+    exam_line_profile_A(
+        (amp, mean, sigma_left, sigma_right),
+        data_info["spec"][spec_idx]["data"],
+        data_info["spec"][spec_idx]["mask"],
+        wavelength=data_info["spec"][spec_idx]["meta"]["lambda_grid"],
+        line="Ha",
+        filename=f"../scripts/binospec_pkl/LPF_slit_{slitnum}_{spec_idx}.png",
+    )
+
+    # First asymmetric Gaussian component.
+    amp_1 = amp[:, 0].copy()
+    mean_1 = mean[:, 0]
+    sigma_left_1 = sigma_left[:, 0]
+    sigma_right_1 = sigma_right[:, 0]
+
+    # Second asymmetric Gaussian component.
+    amp_2 = amp[:, 1].copy()
+    mean_2 = mean[:, 1]
+    sigma_left_2 = sigma_left[:, 1]
+    sigma_right_2 = sigma_right[:, 1]
+
+    # Normalize the amplitudes.
+    if np.any(np.isfinite(amp_1)):
+        maximum_amp_1 = np.nanmax(amp_1)
+
+        if maximum_amp_1 > 0:
+            amp_1 /= maximum_amp_1
+
+    if np.any(np.isfinite(amp_2)):
+        maximum_amp_2 = np.nanmax(amp_2)
+
+        if maximum_amp_2 > 0:
+            amp_2 /= maximum_amp_2
+
+    # Rows with invalid amplitudes are marked as unreliable.
+    reliability_mask = (
+        np.isfinite(amp_1)
+        & np.isfinite(amp_2)
+    )
+
+    amp_1[~reliability_mask] = 0.0
+    amp_2[~reliability_mask] = 0.0
+
+    line_profile_1 = {
+        "amp": amp_1,
+        "mean": mean_1,
+        "std_left": sigma_left_1,
+        "std_right": sigma_right_1,
+        "reliability": reliability_mask,
+        "bkg": np.zeros_like(amp_1),
+    }
+
+    line_profile_2 = {
+        "amp": amp_2,
+        "mean": mean_2,
+        "std_left": sigma_left_2,
+        "std_right": sigma_right_2,
+        "reliability": reliability_mask,
+        "bkg": np.zeros_like(amp_2),
+    }
+
+    with open(f'../scripts/binospec_pkl/LPF_slit_{slitnum}_{spec_idx}.pkl', "wb") as f:
+        joblib.dump((line_profile_1, line_profile_2), f)

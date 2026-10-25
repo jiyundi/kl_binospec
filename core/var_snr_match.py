@@ -7,8 +7,9 @@ from core.find_bkg import bkg_estimate
 
 def find_background_variance(
     data,
-    background_subtracted,
+    bkg_is_subtracted,
     target_snr,
+    mock_bkg=None,
 ):
     """
     根据指定的全图 SNR，反求均匀背景噪声方差。
@@ -18,7 +19,7 @@ def find_background_variance(
     data : array-like, shape (height, width)
         无噪声二维数据。所有像素可能已经减去过同一个背景值。
 
-    background_subtracted : bool
+    bkg_is_subtracted : bool
         True:
             输入数据已经减去背景，不再估计或减去背景。
         False:
@@ -57,8 +58,8 @@ def find_background_variance(
             "请先处理这些无效像素。"
         )
 
-    if not isinstance(background_subtracted, (bool, np.bool_)):
-        raise TypeError("`background_subtracted` 必须是 bool。")
+    if not isinstance(bkg_is_subtracted, (bool, np.bool_)):
+        raise TypeError("`bkg_is_subtracted` 必须是 bool。")
 
     target_snr = float(target_snr)
     if not np.isfinite(target_snr) or target_snr <= 0:
@@ -68,8 +69,11 @@ def find_background_variance(
     signal = data.copy()
 
     # ---------- 可选背景扣除 ----------
-    if not background_subtracted:
-        background = float(bkg_estimate(signal))
+    if bkg_is_subtracted: # need to recover the original CCD counts (all positive)
+        if mock_bkg is None:
+            background = float(bkg_estimate(signal))
+        else:
+            background = mock_bkg
 
         if not np.isfinite(background):
             raise ValueError(
@@ -96,7 +100,11 @@ def find_background_variance(
             dtype=np.float64,
         )
 
-        value = snr_estimate(signal, variance_map)
+        value = snr_estimate(
+            signal, 
+            bkg_is_subtracted=False, # already restored original in this script
+            data_is_noisy=True, noise_var=np.mean(variance_map)
+        )
         value = np.asarray(value)
 
         if value.size != 1:
@@ -178,7 +186,7 @@ def find_background_variance(
 if __name__ == "__main__":
     # variance = find_background_variance(
     #     data=image_2d,
-    #     background_subtracted=True,
+    #     bkg_is_subtracted=True,
     #     target_snr=20.0,
     # )
 

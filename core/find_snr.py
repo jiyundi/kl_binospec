@@ -4,10 +4,11 @@ from core.find_bkg import bkg_estimate
 
 
 def snr_estimate(
-        image, bkg_is_subtracted=True, 
-        data_is_noisy=None, noise_var=0, 
-        var_given=None
-    ):
+    image, 
+    bkg_is_subtracted=True, mock_bkg=None, restore_CCD_flux=True, 
+    data_is_noisy=None, noise_var=0, 
+    var_given=None
+):
     if bkg_is_subtracted == False:
         data = image
         var_poisson = image
@@ -27,10 +28,17 @@ def snr_estimate(
             var = var_poisson + noise_var
 
     else: # bkg_is_subtracted, common for Binospec data
-        data = image
-        background_level = bkg_estimate(image)[0]
-        restored_data    = data - background_level
-        var_poisson = restored_data
+        if mock_bkg is None:
+            background_level = bkg_estimate(image)[0]
+        else:
+            background_level = mock_bkg
+        
+        if restore_CCD_flux:
+            data = image - background_level
+        else: 
+            data = image
+
+        var_poisson = image - background_level # must be restored the original CCD counts
             
         if data_is_noisy == False: # simulated/modelled images
             var = var_poisson

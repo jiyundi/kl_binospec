@@ -64,8 +64,9 @@ def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder):
                                          mock_data_info['spec'][j*n_sets+i]['par_meta']['lambda_grid'][0,-1].value, # x_right
                                          -mock_data_info['spec'][j*n_sets+i]['par_meta']['pixScale']*len(spec_data)/2,  # y_bottom
                                          +mock_data_info['spec'][j*n_sets+i]['par_meta']['pixScale']*len(spec_data)/2], # y_top
-                                 cmap='bone', aspect='auto', 
-                                 vmin=0, vmax=0 + 5*noise)
+                                 cmap='viridis', aspect='auto', 
+                                #  vmin=0, vmax=0 + 5*noise
+                                 )
             fig.colorbar(im_spec, ax=ax1)
             ax1.set_ylim(-mock_data_info['spec'][j*n_sets+i]['par_meta']['pixScale']*len(spec_data)/2,
                          +mock_data_info['spec'][j*n_sets+i]['par_meta']['pixScale']*len(spec_data)/2)
@@ -98,8 +99,9 @@ def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder):
         pixScale   = mock_data_info['image']['par_meta']['pixScale']
         noise = np.std(image_data)
         im_imag = ax2.imshow(np.where(image_mask, image_data, np.nan),  
-                             cmap='gray', aspect='equal', 
-                             vmin=0, vmax=0 + 5*noise)
+                             cmap='viridis', aspect='auto', 
+                            #  vmin=0, vmax=0 + 5*noise
+                             )
         fig.colorbar(im_imag, ax=ax2)
         x0obj,  y0obj  = ap_wcs.wcs_world2pix([[objRA,  objDec ]], 0)[0]  
         x0slit, y0slit = ap_wcs.wcs_world2pix([[slitRA, slitDec]], 0)[0]  
