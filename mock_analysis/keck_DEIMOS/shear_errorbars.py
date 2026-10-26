@@ -60,15 +60,15 @@ colors = ['black', 'crimson', 'royalblue', 'darkorange', 'limegreen']
 ylims  = [(-0.25, 0.25)] #, (-0.8, 0.8)
 
 pars_to_plot = ['gamma_t'] #, 'theta_int'
-runs_folders = ['runs_no_noise/', 'runs_noisy/']
+runs_folders = ['runs_no_noise/', 'runs_noisy_imgSNR40_specSNR30/']
 slit_names  = np.arange(0, 11)
 
 # Specify x-axis
-mock_folder = '008b_vary_thetaint_slitLPA_major/'
+mock_folder = './008b_vary_thetaint_slitLPA_major/'
 special_idxs = ['0.0', '0.3', '0.7', '1.0', '1.4', '1.6', '1.7', '2.1', '2.4', '2.8', '3.1']
 data_infos = []
 for slit_name in slit_names:
-    data_info_path = f'{mock_folder}/slit_002_{special_idxs[slit_name]}.pkl'
+    data_info_path = f'{mock_folder}slit_002_{special_idxs[slit_name]}.pkl'
     with open(data_info_path, "rb") as f:
         data_infos.append(joblib.load(f))
 

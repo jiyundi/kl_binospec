@@ -21,6 +21,7 @@ from matplotlib.pyplot import MultipleLocator
 
 # ── project ───────────────────────────────────────────────────────────────────
 from klm.safe_plot import setup; setup()   # must come before any plt call
+from core.find_snr import snr_estimate
 from core.doublet_utils import deduplicate_ordered
 from core.fitting_result_utils import complete_fit_params
 
@@ -335,7 +336,11 @@ def plot_obs_fit_res(
     )
 
     # (1.5) SNR info on obs panel
-    image_snr = np.sum(image_obs[image_msk]) / np.sqrt(np.sum(image_obs[image_msk] + image_var[image_msk]))
+    # image_snr = np.sum(image_obs[image_msk]) / np.sqrt(np.sum(image_obs[image_msk] + image_var[image_msk]))
+    image_snr = snr_estimate(
+        np.where(image_msk, image_obs, np.nan), 
+        bkg_is_subtracted=False, data_is_noisy=True, noise_var='extract'
+    )
     ax_img_obs.text(
         0.98, 0.97,
         f'N_RA = {nx_img} px\nN_DEC = {ny_img} px\nSNR = {image_snr:.0f}',
@@ -539,11 +544,17 @@ def plot_obs_fit_res(
         )
 
         # (2.8) SNR info on obs panel
-        bg = np.nanmedian(spec_obs[spec_msk])       # = -2.9597
-        spec_obs_zero_bg = np.where(spec_msk, spec_obs - bg, np.nan)
-        spec_snr = (
-            np.nansum(spec_obs_zero_bg) /
-            np.sqrt(np.nansum(spec_var[spec_msk] + spec_obs_zero_bg[spec_msk]))
+        # bg = np.nanmedian(spec_obs[spec_msk])       # = -2.9597
+        # spec_obs_zero_bg = np.where(spec_msk, spec_obs - bg, np.nan)
+        # spec_snr = (
+        #     np.nansum(spec_obs_zero_bg) /
+        #     np.sqrt(np.nansum(spec_var[spec_msk] + spec_obs_zero_bg[spec_msk]))
+        # )
+        spec_snr = snr_estimate(
+            np.where(spec_msk, spec_obs, np.nan),
+            bkg_is_subtracted=True, restore_CCD_flux=True,
+            mock_bkg=data_info["fid_params"]["Hb_params"]["bkg_level"], 
+            data_is_noisy=True, noise_var='extract'
         )
         ax_spe_obs.text(
             0.98, 0.97,

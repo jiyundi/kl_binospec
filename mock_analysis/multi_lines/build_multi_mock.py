@@ -66,13 +66,13 @@ def prepare_a_slitspec(RA_obj, Dec_obj, Set, line, meta_gal, idx_line=0):
         idx_lpf    = idx_line * 3 + 1
     elif Set == 'A':
         # (2) Set A ONLY: 1 arcsec offset (from Set C slit)
-        slit_RA    = RA_obj  - slit_width*u.arcsec * np.cos(slit_LPA)
-        slit_Dec   = Dec_obj + slit_width*u.arcsec * np.sin(slit_LPA)
+        slit_RA    = RA_obj  - slit_width*u.arcsec * np.cos(slit_LPA*u.deg)
+        slit_Dec   = Dec_obj + slit_width*u.arcsec * np.sin(slit_LPA*u.deg)
         idx_lpf    = idx_line * 3 + 0
     elif Set == 'B':
         # (3) Set B ONLY: -1 arcsec offset
-        slit_RA    = RA_obj  + slit_width*u.arcsec * np.cos(slit_LPA)
-        slit_Dec   = Dec_obj - slit_width*u.arcsec * np.sin(slit_LPA)
+        slit_RA    = RA_obj  + slit_width*u.arcsec * np.cos(slit_LPA*u.deg)
+        slit_Dec   = Dec_obj - slit_width*u.arcsec * np.sin(slit_LPA*u.deg)
         idx_lpf    = idx_line * 3 + 2
     elif Set == 'P':
         # (4) Crossed slit: 90 degree to original slit PA
@@ -191,7 +191,8 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
         spec_this_line_this_set = {'meta_spec':  meta_spec,  
                                    'spec_data':  spec_data,  
                                    'spec_var':   spec_var, 
-                                   'cont_model_spec': cont_model_spec }
+                                #    'cont_model_spec': cont_model_spec 
+                                   }
         
         spec_this_set[line] = spec_this_line_this_set
         print('Final spec  SNR:', round(Mock._calculate_snr(spec_data[spec_data>=0],  
@@ -240,16 +241,15 @@ def save_dic_and_pkl(slit_name, all_specs, all_image,
              'mask':       np.ones(spec_this_line_this_set['spec_data'].shape, 
                                    dtype=bool),
              'var':        spec_this_line_this_set['spec_var'],
-             'cont_model': spec_this_line_this_set['cont_model_spec'],
-             'par_meta':   spec_this_line_this_set['meta_spec'] }
+            #  'cont_model': spec_this_line_this_set['cont_model_spec'],
+             'meta':   spec_this_line_this_set['meta_spec'] }
             )
     
     image_data_info = {
-        'data':     all_image['image_data'],
-        'mask':     np.ones(all_image['image_data'].shape, 
-                            dtype=bool),
-        'var':      all_image['image_var'],
-        'par_meta': all_image['meta_image']
+        'data': all_image['image_data'],
+        'mask': np.ones(all_image['image_data'].shape, dtype=bool),
+        'var':  all_image['image_var'],
+        'meta': all_image['meta_image']
         }
     
     mock_data_info = {
@@ -264,7 +264,7 @@ def save_dic_and_pkl(slit_name, all_specs, all_image,
     # Unfortunately, my galsim.wcs objects cannot be packed in PKL files.
     # To pack galsim.wcs, DELETE it before packing in PKL.
     # To read, always regenerate by using ap_wcs. (by JD)
-    mock_data_info['image']['par_meta'].pop('wcs') # delete it!
+    mock_data_info['image']['meta'].pop('wcs') # delete it!
     
     # Save mocks
     with open(f'{mock_folder}pkl/mock_{slit_name}_{iter_num:03d}.pkl', "wb") as f:
@@ -276,9 +276,9 @@ def make_mock_3slits_multi(emi_line_lst=['OII'], update_dict=None, iter_num=999,
                            if_add_noise=True, mock_folder='./', slitname=95):
     # Now get object data from object catalog
     slit_name = '{:03d}'.format(slitname)
-    RA_obj     = 42.0 *u.deg
-    Dec_obj    = -3.4 *u.deg
-    redshift   =  0.5
+    RA_obj     = 10/3600 *u.deg
+    Dec_obj    = 10/3600 *u.deg
+    redshift   = 0.5
     meta_gal = {}
     meta_gal = {
                 'redshift': redshift,
@@ -351,6 +351,8 @@ if __name__ == '__main__':
     for i in range(len(thetalist)):
         for j in range(len(cosi_list)):
             iternum = iternums[i, j]
+
+            # Update params. SNR settings are also in binospec_mock_params.yaml
             update_dict['shared_params-theta_int'] = thetalist[i]
             update_dict['shared_params-cosi']      = cosi_list[j]
             
