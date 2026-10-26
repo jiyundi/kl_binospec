@@ -361,7 +361,7 @@ def plot_obs_fit_res(
         ax.set_xlabel(r'$\Delta$ RA (arcsec)')
     ax_img_obs.set_title(f'#{slit_name} Observation', fontsize=18)
     ax_img_fit.set_title('Best fit model',             fontsize=18)
-    ax_img_res.set_title('Residual (= obs − model)',   fontsize=18)
+    ax_img_res.set_title('Residual (= obs - model)',   fontsize=18)
 
     # ── (2) spectra ────────────────────────────────────────────────────
     for i in range(nspec):

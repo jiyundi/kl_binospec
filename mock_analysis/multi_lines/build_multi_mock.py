@@ -10,6 +10,8 @@ from klm.parameters  import Parameters
 from klm.spec_model  import SlitModel
 from klm.image_model import ImageModel
 from klm.mock        import Mock
+from core.find_snr   import snr_estimate
+from core.var_snr_match import find_background_variance
 from build_mock_plot import make_exam_plots
 
 from klm.safe_plot   import setup; setup() # must before plt
@@ -174,58 +176,88 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
         #                           (1, spec_data.shape[1])
         #                           # (spec_data.shape[1], 1)
         #                           )
-        cont_model_spec = np.zeros(spec_data.shape)
-        spec_var        = np.ones(spec_data.shape) * 100
-        spec_var        = Mock._set_snr(spec_data, spec_var, # Set var to match SNR
-                                        mock_params['shared_params-spec_snr'], 
-                                        'spec', verbose=False)
+        # cont_model_spec = np.zeros(spec_data.shape)
+        spec_var = np.ones(spec_data.shape) * find_background_variance(
+            spec_data,
+            bkg_is_subtracted=False,
+            target_snr=mock_params['shared_params-spec_snr']
+        )
         if if_add_noise==True:
-            noise_level = np.sqrt(spec_var)
-            spec_noise  = noise_level * np.random.randn(spec_data.shape[0],
-                                                        spec_data.shape[1]) # if add noise
-            spec_data   = spec_data + spec_noise # spec_noise
-            print(f'Added a noise level: {np.min(spec_noise):.1f} - {np.max(spec_noise):.1f}')
+            # noise_level = np.sqrt(spec_var)
+            spec_noise  = np.sqrt(
+                np.clip(spec_var, a_min=0.0, a_max=None)
+            )
+
+            white_noise = np.random.normal(
+                    loc=0.0,
+                    scale=spec_noise,
+                    size=spec_data.shape,
+                )
+            
+            spec_data   = spec_data + white_noise # spec_noise
         else:
             spec_data   = spec_data + 0 # no spec_noise
-        
+
+        # Create the spectral mask.
+        spec_mask = np.ones(spec_data.shape, dtype=bool)
+        spec_mask &= spec_data + spec_var > 0
+
         spec_this_line_this_set = {'meta_spec':  meta_spec,  
                                    'spec_data':  spec_data,  
                                    'spec_var':   spec_var, 
-                                #    'cont_model_spec': cont_model_spec 
+                                   'spec_mask':  spec_mask
                                    }
         
         spec_this_set[line] = spec_this_line_this_set
-        print('Final spec  SNR:', round(Mock._calculate_snr(spec_data[spec_data>=0],  
-                                                            spec_var[spec_data>=0],  
-                                                            'spec')))
-        print('Final spec estimated  bkg_level:', f'{np.median(spec_data):.1f}')
-        print('Final spec estimated  bkg noise:', f'{np.std(   spec_data):.1f}')
-        print('Final spec min/max:', f'{np.min(spec_data):.1f} / {np.max(spec_data):.1f}\n')
+
+        spec_snr = snr_estimate(
+            np.where(spec_mask, spec_data, np.nan),
+            bkg_is_subtracted=False, 
+            data_is_noisy=True, noise_var='extract'
+        )
+        print('Final spec  SNR:', round(spec_snr, 1))
+        # print('Final spec estimated  bkg_level:', f'{np.median(spec_data):.1f}')
+        # print('Final spec estimated  bkg noise:', f'{np.std(   spec_data):.1f}')
+        # print('Final spec min/max:', f'{np.min(spec_data):.1f} / {np.max(spec_data):.1f}\n')
     
     # 2. Image
     image_model     = ImageModel(meta_image=meta_imag)
     image_data      = image_model.get_image(updated_dict['shared_params'])
-    image_sky_var   = np.ones(image_data.shape) * 100
-    image_var       = image_data + image_sky_var
-    image_var       = Mock._set_snr(image_data, image_var, # Set var to match SNR
-                                    mock_params['shared_params-image_snr'], 
-                                    'image', verbose=False)
+    image_var       = np.ones(image_data.shape) * find_background_variance(
+        image_data,
+        bkg_is_subtracted=False,
+        target_snr=mock_params['shared_params-image_snr']
+    )
     if if_add_noise==True:
-        noise_level_im = np.sqrt(image_var)/4
-        image_noise = noise_level_im * np.random.randn(image_var.shape[0],
-                                                       image_var.shape[1]) # if adding noise
-        image_data  = image_data + image_noise # image_noise
+        image_noise = np.sqrt(
+            np.clip(image_var, a_min=0.0, a_max=None)
+        )
+    
+        white_noise = np.random.normal(
+            loc=0.0,
+            scale=image_noise,
+            size=image_data.shape,
+        )
+
+        image_data  = image_data + white_noise # image_noise
     else:
         image_data  = image_data + 0 # no image_noise
-    
-    print('Final image SNR:', round(Mock._calculate_snr(image_data[image_data>=0], 
-                                                        image_var[image_data>=0], 
-                                                        'image')))
-    print('------------------------------------------------\n')
+
+    # Create the spectral mask.
+    image_mask = np.ones(image_data.shape, dtype=bool)
+    image_mask &= image_data + image_var > 0
+
+    image_snr = snr_estimate(
+        np.where(image_mask, image_data, np.nan), 
+        bkg_is_subtracted=False, data_is_noisy=True, noise_var='extract'
+    )
+    print('Final image SNR:', round(image_snr, 1))
     
     image_this_set = {'meta_image': meta_imag, 
                       'image_data': image_data, 
-                      'image_var':  image_var }
+                      'image_mask': image_mask,
+                      'image_var':  image_var 
+                      }
     
     return spec_this_set, image_this_set
 
@@ -238,16 +270,14 @@ def save_dic_and_pkl(slit_name, all_specs, all_image,
     for spec_this_line_this_set in all_specs:
         specs_data_info.append(
             {'data':       spec_this_line_this_set['spec_data'],
-             'mask':       np.ones(spec_this_line_this_set['spec_data'].shape, 
-                                   dtype=bool),
+             'mask':       spec_this_line_this_set['spec_mask'],
              'var':        spec_this_line_this_set['spec_var'],
-            #  'cont_model': spec_this_line_this_set['cont_model_spec'],
              'meta':   spec_this_line_this_set['meta_spec'] }
             )
     
     image_data_info = {
         'data': all_image['image_data'],
-        'mask': np.ones(all_image['image_data'].shape, dtype=bool),
+        'mask': all_image['image_mask'],
         'var':  all_image['image_var'],
         'meta': all_image['meta_image']
         }
@@ -320,6 +350,9 @@ def make_mock_3slits_multi(emi_line_lst=['OII'], update_dict=None, iter_num=999,
                                       mock_params, meta_gal, iter_num, 
                                       mock_folder=mock_folder)
     make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder)    
+
+    print('------------------------------------------------\n')
+    
     return mock_data_info
 
 

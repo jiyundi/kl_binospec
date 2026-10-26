@@ -389,8 +389,8 @@ if __name__ == "__main__":
         "--slitID",
         dest="slit_id",
         type=int,
-        default=1,
-        help="Mock slit index. Default: 1.",
+        default=3,
+        help="Mock slit index. Default: 3.",
     )
 
     parser.add_argument(
@@ -444,7 +444,7 @@ if __name__ == "__main__":
         "051", "052", "053", "054", "055"
     ]
 
-    if not 0 <= slit_id < len(special_indices):
+    if not 1 <= slit_id <= len(special_indices):
         raise ValueError(
             f"slit-id must be between 0 and "
             f"{len(special_indices) - 1}. Received {slit_id}."

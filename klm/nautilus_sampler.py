@@ -222,7 +222,7 @@ class NautilusSampler(KLInference):
                 print("[INFO] Loading previous sampling results.")
             elif test_run:
                 print("Testing likelihood...")
-                sampler.run(n_like_max=1000, verbose=True)
+                sampler.run(n_like_max=200, verbose=True)
                 print("\033[42m" + 'INFO:' + "\033[0m " + 'Testing done. OK ✅\n')
             else:
                 sampler.run(verbose=True)
