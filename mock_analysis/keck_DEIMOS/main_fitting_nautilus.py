@@ -774,7 +774,7 @@ if __name__ == "__main__":
         fiducial_params,
         log10_Mstar=data_info["galaxy"]["log10_Mstar"],
         log10_Mstar_err=data_info["galaxy"]["log10_Mstar_err"],
-        use_line_profile="extracted",
+        use_what_line_proflie="meta",
     )
 
     nautilus_sampler = NautilusSampler(

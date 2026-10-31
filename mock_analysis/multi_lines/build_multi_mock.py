@@ -9,7 +9,6 @@ from klm             import utils
 from klm.parameters  import Parameters
 from klm.spec_model  import SlitModel
 from klm.image_model import ImageModel
-from klm.mock        import Mock
 from core.find_snr   import snr_estimate
 from core.var_snr_match import find_background_variance
 from build_mock_plot import make_exam_plots
@@ -118,7 +117,7 @@ def prepare_a_slitspec(RA_obj, Dec_obj, Set, line, meta_gal, idx_line=0):
         'ngrid':          spec_shape,
         'lambda_grid':    lambda_grid, # nm, or *u.Angstrom,
         'pixScale':       spec_pix_scale,  # arcsec/px
-        'rhl':            0.6,
+        'rhl':            None, # must be None if LPF provided
         'slitRA':    slit_RA,
         'slitDec':   slit_Dec,
         'slitWidth': slit_width,
@@ -162,7 +161,8 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
             mock_params.pop(del_key)
         
         spec_model   = SlitModel(obj_param=meta_gal, 
-                                 meta_param=meta_spec)
+                                 meta_param=meta_spec, 
+                                 use_what_line_proflie='meta')
         
         updated_dict = params.gen_param_dict(mock_params_keys, 
                                              mock_params.values())
@@ -302,7 +302,7 @@ def save_dic_and_pkl(slit_name, all_specs, all_image,
 
     return mock_data_info
 
-def make_mock_3slits_multi(emi_line_lst=['OII'], update_dict=None, iter_num=999, 
+def make_mock_3slits_multi(emi_line_lst, update_dict=None, iter_num=999, 
                            if_add_noise=True, mock_folder='./', slitname=95):
     # Now get object data from object catalog
     slit_name = '{:03d}'.format(slitname)

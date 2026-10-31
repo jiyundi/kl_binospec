@@ -553,7 +553,6 @@ def plot_obs_fit_res(
         spec_snr = snr_estimate(
             np.where(spec_msk, spec_obs, np.nan),
             bkg_is_subtracted=True, restore_CCD_flux=True,
-            mock_bkg=data_info["fid_params"]["Hb_params"]["bkg_level"], 
             data_is_noisy=True, noise_var='extract'
         )
         ax_spe_obs.text(

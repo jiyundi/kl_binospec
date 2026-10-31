@@ -45,7 +45,7 @@ class SlitModel(KinematicModel):
     Class for creating model spectrum
     '''
     def __init__(self, obj_param=None, meta_param=None, 
-                 line_profile=None, redo_data=None, 
+                 use_what_line_proflie=0, redo_data=None, 
                  rc_type='arctan'):
         self.velocity_model = VelocityModel(rc_type)
         self._init_observable(obj_param, meta_param)
@@ -55,29 +55,47 @@ class SlitModel(KinematicModel):
             meta_param['line_species'], obj_param['redshift']
             )
 
-        # sigma1 & sigma2 are the line widths of the two half-Gaussians
-        if line_profile == 'redo':
-            self.emission_line_model = EmissionLine(
-                use_analytic=False, 
-                line_species=meta_param['line_species'], 
-                line_profile={'data': redo_data})
-        
-        elif line_profile is not None:
-            self.emission_line_model = EmissionLine(
-                use_analytic=False, 
-                line_species=meta_param['line_species'], 
-                line_profile=meta_param['line_profile'])
+        # User must choose how to make line profile functions
+        if use_what_line_proflie == 0:
+            raise ValueError(
+                'Choose any from "redo", "meta", or "analytic" ' \
+                'to use line profiles'
+                )
 
-        elif 'rhl' in meta_param.keys():
+        # Read line profile functions provided
+        if use_what_line_proflie == 'redo':
             self.emission_line_model = EmissionLine(
-                use_analytic=True, 
+                use_analytic=False, 
                 line_species=meta_param['line_species'], 
-                rhl=meta_param['rhl'], 
-                slit_grid=self.slit_x)
+                line_profile={'data': redo_data}
+            )
+        
+        elif use_what_line_proflie in ('obs', 'meta'):
+            self.emission_line_model = EmissionLine(
+                use_analytic=False, 
+                line_species=meta_param['line_species'], 
+                line_profile=meta_param['line_profile']
+            )
+
+        elif use_what_line_proflie in (None, 'analytic'):
+            try:
+                if meta_param['rhl'] is not None:
+                    self.emission_line_model = EmissionLine(
+                        use_analytic=True, 
+                        line_species=meta_param['line_species'], 
+                        rhl=meta_param['rhl'], 
+                        slit_grid=self.slit_x
+                    )
+            except ValueError:
+                raise ValueError(
+                    'You choose not to provide a line profile function so ' \
+                    'you need a rhl in order to generate the model emission line.'
+                )
 
         else:
             raise ValueError('Either need line profile from obs or rhl to instantiate analytic line profile')
 
+        # sigma1 & sigma2 are the line widths of the two half-Gaussians
         self.profile_sigma1, self.profile_sigma2 = self.emission_line_model.line_profile.get_linewidth_profile(self.ndim)
         self.profile_one_over_sigma1 = [1/p for p in self.profile_sigma1]
         self.profile_one_over_sigma2 = [1/p for p in self.profile_sigma2]

@@ -389,15 +389,15 @@ if __name__ == "__main__":
         "--slitID",
         dest="slit_id",
         type=int,
-        default=3,
-        help="Mock slit index. Default: 3.",
+        default=9,
+        help="Mock slit index. Default: 9",
     )
 
     parser.add_argument(
         "--run",
         type=int,
         default=1,
-        help="Run number. Default: 1.",
+        help="Run number. Default: 1",
     )
 
     parser.add_argument(
@@ -504,7 +504,7 @@ if __name__ == "__main__":
     #     bkg_is_subtracted=False, data_is_noisy=False
     # )
     # spec_snr  = snr_estimate(
-    #     data_info["spec"][0]["data"], 
+    #     data_info["spec"][spec_idx]["data"], 
     #     restore_CCD_flux=True,
     #     mock_bkg=data_info["fid_params"]["line_params"]["bkg_level"], 
     #     bkg_is_subtracted=True, data_is_noisy=False
@@ -513,26 +513,117 @@ if __name__ == "__main__":
     # print("Spec  S/N without noise =", round(spec_snr,  1))
 
     # -----------------------------------------------------------------------
-    # 1.1 Extract the asymmetric H-beta line profiles
+    # 1.1 Extract the asymmetric line profiles for all lines
     # -----------------------------------------------------------------------
 
-    # Line profile extracted from the noisy spectrum.
-    amp, mean, sigma_left, sigma_right = extract_asymmetric_lpf_A(
-        data_info["spec"][0]["data"],
-        data_info["spec"][0]["meta"]["lambda_grid"],
-        line="Hb",
-    )
-
-    _restored, _residual = exam_line_profile_A(
-        (amp, mean, sigma_left, sigma_right),
-        data_info["spec"][0]["data"],
-        data_info["spec"][0]["mask"],
-        wavelength=data_info["spec"][0]["meta"]["lambda_grid"],
-        line="Hb",
-        filename=str(
-            diagnostic_folder / f"LPF_mock_{special_indices[slit_id-1]}.png"
+    for spec_idx in range(len(data_info["spec"])):
+    
+        # Line profile extracted from the noisy spectrum.
+        amp, mean, sigma_left, sigma_right = extract_asymmetric_lpf_A(
+            data_info["spec"][spec_idx]["data"],
+            data_info["spec"][spec_idx]["meta"]["lambda_grid"],
+            line=data_info["spec"][spec_idx]["meta"]["line_species"],
         )
-    )
+
+        exam_line_profile_A(
+            (amp, mean, sigma_left, sigma_right),
+            data_info["spec"][spec_idx]["data"],
+            data_info["spec"][spec_idx]["mask"],
+            wavelength=data_info["spec"][spec_idx]["meta"]["lambda_grid"],
+            line=data_info["spec"][spec_idx]["meta"]["line_species"],
+            filename=str(
+                diagnostic_folder / f"LPF_mock_{special_indices[slit_id-1]}_line{spec_idx}.png"
+            )
+        )
+
+        # # First asymmetric Gaussian component.
+        # amp_1 = amp[:, 0].copy()
+        # mean_1 = mean[:, 0]
+        # sigma_left_1 = sigma_left[:, 0]
+        # sigma_right_1 = sigma_right[:, 0]
+
+        # # Second asymmetric Gaussian component.
+        # amp_2 = amp[:, 1].copy()
+        # mean_2 = mean[:, 1]
+        # sigma_left_2 = sigma_left[:, 1]
+        # sigma_right_2 = sigma_right[:, 1]
+
+        # # Normalize the amplitudes.
+        # if np.any(np.isfinite(amp_1)):
+        #     maximum_amp_1 = np.nanmax(amp_1)
+
+        #     if maximum_amp_1 > 0:
+        #         amp_1 /= maximum_amp_1
+
+        # if np.any(np.isfinite(amp_2)):
+        #     maximum_amp_2 = np.nanmax(amp_2)
+
+        #     if maximum_amp_2 > 0:
+        #         amp_2 /= maximum_amp_2
+
+        # # Rows with invalid amplitudes are marked as unreliable.
+        # reliability_mask = (
+        #     np.isfinite(amp_1)
+        #     & np.isfinite(amp_2)
+        # )
+
+        # amp_1[~reliability_mask] = 0.0
+        # amp_2[~reliability_mask] = 0.0
+
+        # line_profile_1 = {
+        #     "amp": amp_1,
+        #     "mean": mean_1,
+        #     "std_left": sigma_left_1,
+        #     "std_right": sigma_right_1,
+        #     "reliability": reliability_mask,
+        #     "bkg": np.zeros_like(amp_1),
+        # }
+
+        # line_profile_2 = {
+        #     "amp": amp_2,
+        #     "mean": mean_2,
+        #     "std_left": sigma_left_2,
+        #     "std_right": sigma_right_2,
+        #     "reliability": reliability_mask,
+        #     "bkg": np.zeros_like(amp_2),
+        # }
+
+        # data_info["spec"][spec_idx]["meta"]["line_profile"] = (
+        #     line_profile_1,
+        #     line_profile_2,
+        # )
+
+        # DEBUG USE ONLY
+        # import matplotlib.pyplot as plt
+        # fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(6,2)) # (width, height)
+        # yy1 = data_info["spec"][spec_idx]["meta"]["line_profile"][0]['std_left']
+        # ax[0].plot(np.arange(len(yy1)), yy1, label='new: std_left')
+
+        # lpf_filenames = [
+        #     '../../scripts/binospec_pkl/LPF_slit_109_3.pkl', 
+        #     '../../scripts/binospec_pkl/LPF_slit_109_4.pkl', 
+        #     '../../scripts/binospec_pkl/LPF_slit_109_5.pkl', 
+        #     '../../scripts/binospec_pkl/LPF_slit_128_3.pkl', 
+        #     '../../scripts/binospec_pkl/LPF_slit_128_4.pkl', 
+        #     '../../scripts/binospec_pkl/LPF_slit_128_5.pkl', 
+        # ]
+        # with open(lpf_filenames[spec_idx], "rb") as f:
+        #     lpf1, _ = joblib.load(f)
+        # ax[0].plot(np.arange(len(lpf1['std_left'])), lpf1['std_left'], label='old: std_left')
+
+        # yy3 = data_info["spec"][spec_idx]["meta"]["line_profile"][0]['std_right']
+        # ax[1].plot(np.arange(len(yy3)), yy3, label='new: std_right')
+        # ax[1].plot(np.arange(len(lpf1['std_right'])), lpf1['std_right'], label='old: std_right')
+
+        # yy5 = data_info["spec"][spec_idx]["meta"]["line_profile"][0]['amp']
+        # ax[2].plot(np.arange(len(yy5)), yy5, label='new: amp')
+        # ax[2].plot(np.arange(len(lpf1['amp'])), lpf1['amp'], label='old: amp')
+
+        # plt.tight_layout()
+        # ax[0].legend()
+        # ax[1].legend()
+        # ax[2].legend()
+        # plt.savefig(f'test{spec_idx}.jpg')
 
     # -----------------------------------------------------------------------
     # 2. Load the fitting configuration
@@ -555,7 +646,7 @@ if __name__ == "__main__":
         fiducial_params,
         log10_Mstar=data_info["galaxy"]["log10_Mstar"],
         log10_Mstar_err=data_info["galaxy"]["log10_Mstar_err"],
-        use_line_profile="extracted",
+        use_what_line_proflie="meta",
     )
 
     nautilus_sampler = NautilusSampler(

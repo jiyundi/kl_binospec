@@ -49,18 +49,21 @@ def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder):
             spec_var  = mock_data_info['spec'][j*n_sets+i]['var']
             # spec_cont = mock_data_info['spec'][j*n_sets+i]['cont']
             
-            spec_data = np.flip(spec_data, axis=0)
-            spec_var  = np.flip(spec_var,  axis=0)
-            spec_mask = np.flip(spec_mask, axis=0)
+            # spec_data[0, 0] == spec's lower-left (y_min, wave_min)
+            # Set origin='lower', no need to flip.
+            # spec_data = np.flip(spec_data, axis=0)
+            # spec_var  = np.flip(spec_var,  axis=0)
+            # spec_mask = np.flip(spec_mask, axis=0)
             
             noise     = np.std(spec_data)
             line      = mock_data_info['spec'][j*n_sets+i]['meta']['line_species']
-            im_spec = ax1.imshow(np.where(spec_mask, spec_data, np.nan), origin='lower', 
+            im_spec = ax1.imshow(np.where(spec_mask, spec_data, np.nan), 
                                  extent=[mock_data_info['spec'][j*n_sets+i]['meta']['lambda_grid'][0, 0].value, # x_left
                                          mock_data_info['spec'][j*n_sets+i]['meta']['lambda_grid'][0,-1].value, # x_right
                                          -mock_data_info['spec'][j*n_sets+i]['meta']['pixScale']*len(spec_data)/2,  # y_bottom
                                          +mock_data_info['spec'][j*n_sets+i]['meta']['pixScale']*len(spec_data)/2], # y_top
                                  cmap='viridis', aspect='auto', 
+                                 origin='lower', 
                                 #  vmin=0, vmax=0 + 5*noise
                                  )
             fig.colorbar(im_spec, ax=ax1)
@@ -76,7 +79,7 @@ def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder):
             ax1.text(0.02, 0.02, 
                      f'Min={np.min(spec_data[spec_mask]):.1f}'+'\n'+
                      f'Max={np.max(spec_data[spec_mask]):.1f}'+'\n'+
-                     f'SNR={specSNR:.0f}', 
+                     f'Simple SNR={specSNR:.0f}', 
                      fontsize=10, color='orangered', ha='left', va='bottom', 
                      transform=ax1.transAxes)
             
