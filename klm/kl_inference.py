@@ -159,7 +159,7 @@ class KLInference():
             S = SlitModel(
                 obj_param=self.meta_gal, 
                 meta_param=this_spec['meta'], 
-                line_profile=self.config.galaxy_params.line_profile_path,
+                use_what_line_proflie=self.config.galaxy_params.line_profile_path,
                 redo_data=this_spec['data'],
                 rc_type=self.config.galaxy_params.rc_type,
                 )

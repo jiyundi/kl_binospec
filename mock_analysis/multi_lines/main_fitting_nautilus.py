@@ -901,7 +901,8 @@ if __name__ == "__main__":
         # )
 
         true_values = [
-            data_info["fid_params"]["shared_params"]["gamma_t"],
+            data_info["fid_params"]["shared_params"]["g1"],
+            data_info["fid_params"]["shared_params"]["g2"],
             data_info["fid_params"]["shared_params"]["theta_int"],
             data_info["fid_params"]["shared_params"]["vcirc"],
             data_info["fid_params"]["shared_params"]["cosi"],
@@ -912,10 +913,20 @@ if __name__ == "__main__":
             data_info["fid_params"]["shared_params"]["vscale"],
             data_info["fid_params"]["line_params"]["v_0"],
             data_info["fid_params"]["line_params"]["I01"],
-            data_info["fid_params"]["line_params"]["bkg_level"],
-            data_info["fid_params"]["line_params"]["dx_vel"],
-            1,
-            1,
+            data_info["fid_params"]["line_params"]["I01"],
+            data_info["fid_params"]["line_params"]["I01"],
+            data_info["fid_params"]["line_params"]["dx_vel_1"],
+            data_info["fid_params"]["line_params"]["dx_vel_2"],
+            data_info["fid_params"]["line_params"]["dx_vel_3"],
+            data_info["fid_params"]["line_params"]["v_0"],
+            data_info["fid_params"]["line_params"]["I01"],
+            data_info["fid_params"]["line_params"]["I01"],
+            data_info["fid_params"]["line_params"]["I01"],
+            data_info["fid_params"]["line_params"]["dx_vel_1"],
+            data_info["fid_params"]["line_params"]["dx_vel_2"],
+            data_info["fid_params"]["line_params"]["dx_vel_3"],
+            # 1,
+            # 1,
         ]
 
         plot_corner(

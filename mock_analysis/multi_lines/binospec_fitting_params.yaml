@@ -82,3 +82,48 @@ line_params:
         prior:
             min:    0
             max: 1000
+    dx_vel_spec1:
+        latex_name: $\Delta x_{\rm vel, Spec 1}$
+        prior: 
+            min: -0.3
+            max:  0.3
+    dx_vel_spec2:
+        latex_name: $\Delta x_{\rm vel, Spec 1}$
+        prior: 
+            min: -0.3
+            max:  0.3
+    dx_vel_spec3:
+        latex_name: $\Delta x_{\rm vel, Spec 1}$
+        prior: 
+            min: -0.3
+            max:  0.3
+    # f1_1_spec1:
+    #     latex_name: $f_{\sigma, L}^{\rm Spec\,1}$
+    #     prior:
+    #         min: 0.25
+    #         max: 3.0
+    # f1_2_spec1:
+    #     latex_name: $f_{\sigma, R}^{\rm Spec\,1}$
+    #     prior:
+    #         min: 0.25
+    #         max: 3.0
+    # f1_1_spec2:
+    #     latex_name: $f_{\sigma, L}^{\rm Spec\,1}$
+    #     prior:
+    #         min: 0.25
+    #         max: 3.0
+    # f1_2_spec2:
+    #     latex_name: $f_{\sigma, R}^{\rm Spec\,1}$
+    #     prior:
+    #         min: 0.25
+    #         max: 3.0
+    # f1_1_spec3:
+    #     latex_name: $f_{\sigma, L}^{\rm Spec\,1}$
+    #     prior:
+    #         min: 0.25
+    #         max: 3.0
+    # f1_2_spec3:
+    #     latex_name: $f_{\sigma, R}^{\rm Spec\,1}$
+    #     prior:
+    #         min: 0.25
+    #         max: 3.0
