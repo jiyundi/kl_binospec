@@ -305,7 +305,8 @@ if __name__ == "__main__":
                     ax.plot(grid, pdf, lw=1.5, alpha=0.75, label=label, 
                             ls=('--' if idx_s%2==0 else ':'))
 
-                product = np.exp(log_product - log_product.max())
+                log_geomean = log_product / len(members) # take n-th root
+                product = np.exp(log_geomean - log_geomean.max()) # peak normalization
                 # product /= trapezoid(product, grid)
 
                 ax.plot(
