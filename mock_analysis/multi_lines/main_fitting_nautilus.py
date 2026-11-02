@@ -423,7 +423,7 @@ if __name__ == "__main__":
     # Paths: edit these directly when necessary
     # -----------------------------------------------------------------------
 
-    mock_folder = Path("mock_pkl/pkl")
+    mock_folder = Path("mock_pkl_noisy_imgSNR40_specSNR05/pkl")
 
     fiducial_yaml = Path(
         "binospec_fid_params.yaml"
@@ -915,16 +915,16 @@ if __name__ == "__main__":
             data_info["fid_params"]["line_params"]["I01"],
             data_info["fid_params"]["line_params"]["I01"],
             data_info["fid_params"]["line_params"]["I01"],
-            data_info["fid_params"]["line_params"]["dx_vel_1"],
-            data_info["fid_params"]["line_params"]["dx_vel_2"],
-            data_info["fid_params"]["line_params"]["dx_vel_3"],
+            data_info["fid_params"]["line_params"]["dx_vel"],
+            data_info["fid_params"]["line_params"]["dx_vel"],
+            data_info["fid_params"]["line_params"]["dx_vel"],
             data_info["fid_params"]["line_params"]["v_0"],
             data_info["fid_params"]["line_params"]["I01"],
             data_info["fid_params"]["line_params"]["I01"],
             data_info["fid_params"]["line_params"]["I01"],
-            data_info["fid_params"]["line_params"]["dx_vel_1"],
-            data_info["fid_params"]["line_params"]["dx_vel_2"],
-            data_info["fid_params"]["line_params"]["dx_vel_3"],
+            data_info["fid_params"]["line_params"]["dx_vel"],
+            data_info["fid_params"]["line_params"]["dx_vel"],
+            data_info["fid_params"]["line_params"]["dx_vel"],
             # 1,
             # 1,
         ]

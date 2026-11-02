@@ -5,103 +5,6 @@ import matplotlib.pyplot as plt
 
 from spec_snr_estimate import bkg_estimate
 
-# --------------------------------------------------
-# 1. 读取所有光谱、mask 和 SNR
-# --------------------------------------------------
-spectra_records = []
-
-for slit_num in range(143):
-    filepath = (
-        f"../scripts/binospec_pkl/pkl/"
-        f"slit_{slit_num:03d}.pkl"
-    )
-
-    try:
-        with open(filepath, "rb") as file:
-            data_info = joblib.load(file)
-    except FileNotFoundError:
-        print(f"文件不存在，跳过：{filepath}")
-        continue
-
-    for spec_idx, spec in enumerate(data_info["spec"]):
-        pkl_flux = np.asarray(spec["data"]).squeeze()
-        pkl_bkg_var = np.asarray(spec["var"]).squeeze()
-
-        # 如果你的 mask 在其他位置，请修改这一行
-        mask = np.asarray(spec["mask"], dtype=bool).squeeze()
-
-        if pkl_flux.shape != mask.shape:
-            print(
-                f"跳过 slit={slit_num}, spec={spec_idx}："
-                f"flux shape={pkl_flux.shape}, "
-                f"mask shape={mask.shape}"
-            )
-            continue
-
-        background = bkg_estimate(pkl_flux[mask])[0]
-
-        spec_snr = (
-            np.nansum(pkl_flux[mask])
-            / np.sqrt(np.nansum((pkl_flux[mask] - background) + pkl_bkg_var[mask]))
-        )
-        
-        spec_snr = float(np.asarray(spec_snr).squeeze())
-
-        # mask=False 的位置设置成 NaN，画图时会显示为空白
-        masked_flux = np.where(mask, pkl_flux, np.nan)
-
-        spectra_records.append({
-            "slit_num": slit_num,
-            "spec_idx": spec_idx,
-            "spec_snr": spec_snr,
-            "flux": masked_flux,
-        })
-
-
-print(f"成功读取的光谱总数：{len(spectra_records)}")
-
-# --------------------------------------------------
-# 2. 根据 SNR 分成两组，NaN 类型的 SNR 不会进入任何一组。
-# --------------------------------------------------
-
-positive_spectra = [
-    record
-    for record in spectra_records
-    if np.isfinite(record["spec_snr"])
-    and record["spec_snr"] >= 0
-]
-
-negative_spectra = [
-    record
-    for record in spectra_records
-    if np.isfinite(record["spec_snr"])
-    and record["spec_snr"] < 0
-]
-
-# 按照 SNR 从大到小排序
-positive_spectra.sort(
-    key=lambda record: record["spec_snr"],
-    reverse=True,
-)
-
-negative_spectra.sort(
-    key=lambda record: record["spec_snr"],
-    reverse=True,
-)
-
-nan_snr_count = sum(
-    not np.isfinite(record["spec_snr"])
-    for record in spectra_records
-)
-
-print(f"SNR >= 0：{len(positive_spectra)}")
-print(f"SNR < 0：{len(negative_spectra)}")
-print(f"SNR 为 NaN 或 Inf：{nan_snr_count}")
-
-# --------------------------------------------------
-# 3. 绘制包含很多小光谱的整张图片
-# --------------------------------------------------
-
 def plot_2d_spectra_grid(
     records,
     title,
@@ -282,7 +185,7 @@ def plot_2d_spectra_grid(
         left=0.015,
         right=0.995,
         bottom=0.015,
-        top=0.965,
+        top=0.98,
         wspace=0.08,
         hspace=0.15,
     )
@@ -306,18 +209,118 @@ def plot_2d_spectra_grid(
         f"图像尺寸：{fig_width:.1f} × {fig_height:.1f} 英寸"
     )
     
-plot_2d_spectra_grid(
-    positive_spectra,
-    title="2D Spectra with SNR >= 0",
-    output_file="spectra_2d_snr_ge_0_standard.png",
-    max_figsize=20,
-    dpi=100,
-)
 
-plot_2d_spectra_grid(
-    negative_spectra,
-    title="2D Spectra with SNR < 0",
-    output_file="spectra_2d_snr_lt_0_standard.png",
-    max_figsize=20,
-    dpi=100,
-)
+if __name__ == "__main__":
+    
+    # --------------------------------------------------
+    # 1. 读取所有光谱、mask 和 SNR
+    # --------------------------------------------------
+    spectra_records = []
+
+    for slit_num in range(143):
+        filepath = (
+            f"../scripts/binospec_pkl/pkl/"
+            f"slit_{slit_num:03d}.pkl"
+        )
+
+        try:
+            with open(filepath, "rb") as file:
+                data_info = joblib.load(file)
+        except FileNotFoundError:
+            print(f"文件不存在，跳过：{filepath}")
+            continue
+
+        for spec_idx, spec in enumerate(data_info["spec"]):
+            pkl_flux = np.asarray(spec["data"]).squeeze()
+            pkl_bkg_var = np.asarray(spec["var"]).squeeze()
+
+            # 如果你的 mask 在其他位置，请修改这一行
+            mask = np.asarray(spec["mask"], dtype=bool).squeeze()
+
+            if pkl_flux.shape != mask.shape:
+                print(
+                    f"跳过 slit={slit_num}, spec={spec_idx}："
+                    f"flux shape={pkl_flux.shape}, "
+                    f"mask shape={mask.shape}"
+                )
+                continue
+
+            background = bkg_estimate(pkl_flux[mask])[0]
+
+            spec_snr = (
+                np.nansum(pkl_flux[mask] - background)
+                / np.sqrt(np.nansum((pkl_flux[mask] - background) + pkl_bkg_var[mask]))
+            )
+            
+            spec_snr = float(np.asarray(spec_snr).squeeze())
+
+            # mask=False 的位置设置成 NaN，画图时会显示为空白
+            masked_flux = np.where(mask, pkl_flux, np.nan)
+
+            spectra_records.append({
+                "slit_num": slit_num,
+                "spec_idx": spec_idx,
+                "spec_snr": spec_snr,
+                "flux": masked_flux,
+            })
+
+
+    print(f"成功读取的光谱总数：{len(spectra_records)}")
+
+    # --------------------------------------------------
+    # 2. 根据 SNR 分成两组，NaN 类型的 SNR 不会进入任何一组。
+    # --------------------------------------------------
+
+    positive_spectra = [
+        record
+        for record in spectra_records
+        if np.isfinite(record["spec_snr"])
+        and record["spec_snr"] >= 0
+    ]
+
+    negative_spectra = [
+        record
+        for record in spectra_records
+        if np.isfinite(record["spec_snr"])
+        and record["spec_snr"] < 0
+    ]
+
+    # 按照 SNR 从大到小排序
+    positive_spectra.sort(
+        key=lambda record: record["spec_snr"],
+        reverse=True,
+    )
+
+    negative_spectra.sort(
+        key=lambda record: record["spec_snr"],
+        reverse=True,
+    )
+
+    nan_snr_count = sum(
+        not np.isfinite(record["spec_snr"])
+        for record in spectra_records
+    )
+
+    print(f"SNR >= 0：{len(positive_spectra)}")
+    print(f"SNR < 0：{len(negative_spectra)}")
+    print(f"SNR 为 NaN 或 Inf：{nan_snr_count}")
+
+    # --------------------------------------------------
+    # 3. 绘制包含很多小光谱的整张图片
+    # --------------------------------------------------
+
+    plot_2d_spectra_grid(
+        positive_spectra,
+        title="2D Spectra with SNR >= 0",
+        output_file="spectra_2d_positive_snr.png",
+        max_figsize=20,
+        dpi=100,
+    )
+
+    plot_2d_spectra_grid(
+        negative_spectra,
+        title="2D Spectra with SNR < 0",
+        output_file="spectra_2d_negative_snr.png",
+        max_figsize=20,
+        dpi=100,
+    )

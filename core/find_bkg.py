@@ -39,7 +39,8 @@ def bkg_estimate(data):
     # Smoothing is used only for detection, not for flux measurement
     smooth = ndimage.gaussian_filter(data, sigma=1.0)
 
-    detect_mask = smooth > bkg0 + 3.0 * sigma0
+    detect_mask = smooth > bkg0 + 1.0 * sigma0
+    assert np.sum(detect_mask) >= 1, 'Data is so noisy. No significant emission structure was detected.'
 
     # Label connected components
     labels, nlabels = ndimage.label(detect_mask)
@@ -63,6 +64,7 @@ def bkg_estimate(data):
 
     # Dilate outward to include the emission-line wings
     source_mask = ndimage.binary_dilation(core_mask, iterations=4)
+    assert np.sum(source_mask) >= 1, 'No significant emission structure was detected.'
 
     # Define a larger guard region to prevent line-wing contamination
     # of the background estimate

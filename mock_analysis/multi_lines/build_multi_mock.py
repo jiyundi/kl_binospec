@@ -27,7 +27,7 @@ def prepare_an_image(RA_obj, Dec_obj):
     """
         Make a dic for image data
     """
-    image_shape     = (30, 30) # nRA, nDEC
+    image_shape     = (61, 63) # nRA, nDEC
     image_pix_scale = 0.2      # arcsec/pix: 0.2 for HSC image
     psfFWHM         = 0.6      # arcsec
     ap_wcs           = wcs.WCS(naxis=2) # Create WCS
@@ -56,8 +56,9 @@ def prepare_a_slitspec(RA_obj, Dec_obj, Set, line, meta_gal, idx_line=0):
     # slit_len   =  8
     slit_width =  1
     slit_LPA   =  25 #+ 90*u.deg
-    spec_pix_scale  = 0.24     # arcsec/pix by Binospec
-    spec_shape      = [20, 40] # (spatial pixels, N wavelength points)
+    spec_pix_scale  = 0.24      # arcsec/pix by Binospec
+    spec_shape      = [20, 48]  # (spatial pixels, N wavelength points)
+                                # N_spatial must match with the size of LPF file.
     
     # Only select one from these 3 RA-Dec settings
     if   Set == 'C':
@@ -134,7 +135,7 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
     """
     mock_params = mockparams.copy()
     
-    meta_imag  = prepare_an_image(  meta_gal['RA'], meta_gal['Dec'])
+    meta_imag  = prepare_an_image(meta_gal['RA'], meta_gal['Dec'])
     params     = Parameters(line_species=emi_line_lst)
     
     # 1. Spec
@@ -169,21 +170,12 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
         this_line_dict  = {**updated_dict['shared_params'], 
                            **updated_dict[f'{line}_params']} # merge dict
         spec_data       = spec_model.get_observable(this_line_dict)
-        # cont_vertical   = np.exp(
-        #     -np.abs(np.arange(spec_data.shape[0]) - spec_data.shape[0]/2)**2 / 10
-        #     ) * np.std(spec_data)
-        # cont_model_spec = np.tile(np.array([cont_vertical]).T, 
-        #                           (1, spec_data.shape[1])
-        #                           # (spec_data.shape[1], 1)
-        #                           )
-        # cont_model_spec = np.zeros(spec_data.shape)
         spec_var = np.ones(spec_data.shape) * find_background_variance(
             spec_data,
             bkg_is_subtracted=False,
             target_snr=mock_params['shared_params-spec_snr']
         )
         if if_add_noise==True:
-            # noise_level = np.sqrt(spec_var)
             spec_noise  = np.sqrt(
                 np.clip(spec_var, a_min=0.0, a_max=None)
             )
@@ -215,10 +207,7 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
             bkg_is_subtracted=False, 
             data_is_noisy=True, noise_var='extract'
         )
-        print('Final spec  SNR:', round(spec_snr, 1))
-        # print('Final spec estimated  bkg_level:', f'{np.median(spec_data):.1f}')
-        # print('Final spec estimated  bkg noise:', f'{np.std(   spec_data):.1f}')
-        # print('Final spec min/max:', f'{np.min(spec_data):.1f} / {np.max(spec_data):.1f}\n')
+        print('Final spec  SNR:', round(spec_snr, 1), f'(Set {Set}, line {line})')
     
     # 2. Image
     image_model     = ImageModel(meta_image=meta_imag)
@@ -243,7 +232,7 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
     else:
         image_data  = image_data + 0 # no image_noise
 
-    # Create the spectral mask.
+    # Create a mask.
     image_mask = np.ones(image_data.shape, dtype=bool)
     image_mask &= image_data + image_var > 0
 
@@ -315,9 +304,9 @@ def make_mock_3slits_multi(emi_line_lst, update_dict=None, iter_num=999,
                 'RA':      RA_obj,
                 'Dec':     Dec_obj,
                 'beta':    0*u.deg,
-                'log10_Mstar': 10.00, 
+                'log10_Mstar': None, 
                 # None, by log10(vcirc) = (log10_Mstar - 1.718) / 3.869
-                'log10_Mstar_err': 0.05,
+                'log10_Mstar_err': None,
                 }
     
     with open("./binospec_mock_params.yaml", "r", encoding="utf-8") as file:
@@ -325,6 +314,12 @@ def make_mock_3slits_multi(emi_line_lst, update_dict=None, iter_num=999,
     
     if update_dict != None or len(update_dict) != 0:
         mock_params.update(update_dict)
+    
+    # Update mock_params. Adjust log10_Mstar and log10_Mstar_err based on Pranjal's values
+    meta_gal["log10_Mstar"]     = 10.773306641847052
+    meta_gal["log10_Mstar_err"] =  0.12380290324800487
+
+    mock_params['shared_params-vcirc'] = 10**((meta_gal["log10_Mstar"] - 1.718) / 3.869)
     
     spec_this_setA, image_A = make_mock_data(
         emi_line_lst, meta_gal, mock_params, 
@@ -370,7 +365,7 @@ if __name__ == '__main__':
         To protect them, only when directly execute this script,
         the variables below will then be executed.
     """
-    mock_folder = 'mock_pkl/'
+    mock_folder = 'mock_pkl_noisy_imgSNR40_specSNR05/'
     slitname = 0
     lines = ['Hb','Ha']
     
