@@ -1,32 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+from core.find_snr  import snr_estimate
 from data_prep.plot import rot_rectangle
 
-# def rot_rectangle(ax, x0, y0, dx, dy, rotation, color, ls):
-#     xUL = x0 + (-dx/2)*np.cos(rotation) - (+dy/2)*np.sin(rotation)
-#     yUL = y0 + (-dx/2)*np.sin(rotation) + (+dy/2)*np.cos(rotation)
-#     xUR = x0 + (+dx/2)*np.cos(rotation) - (+dy/2)*np.sin(rotation)
-#     yUR = y0 + (+dx/2)*np.sin(rotation) + (+dy/2)*np.cos(rotation)
-#     xLL = x0 + (-dx/2)*np.cos(rotation) - (-dy/2)*np.sin(rotation)
-#     yLL = y0 + (-dx/2)*np.sin(rotation) + (-dy/2)*np.cos(rotation)
-#     xLR = x0 + (+dx/2)*np.cos(rotation) - (-dy/2)*np.sin(rotation)
-#     yLR = y0 + (+dx/2)*np.sin(rotation) + (-dy/2)*np.cos(rotation)
-#     ax.plot([xUL, xUR, xLR, xLL, xUL], 
-#             [yUL, yUR, yLR, yLL, yUL], color=color, linestyle=ls)
-#     return 
 
-
-def solve_snr(data, var, data_type):
-    if data_type == 'image':
-        return np.sum(data) / np.sum(var)**0.5
-
-    elif data_type == 'spec':
-        return np.sum(data) / (np.sum(data) + np.sum(var))**0.5
-
-
-def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder):
-    setnames = ['A', 'C', 'B']
+def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder,
+                    setnames = ['A', 'C', 'B']):
     n_sets   = len(setnames)
     n_specs  = len(mock_data_info['spec'])
     n_lines  = int(n_specs / n_sets)
@@ -47,15 +27,10 @@ def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder):
             spec_data = mock_data_info['spec'][j*n_sets+i]['data']
             spec_mask = mock_data_info['spec'][j*n_sets+i]['mask']
             spec_var  = mock_data_info['spec'][j*n_sets+i]['var']
-            # spec_cont = mock_data_info['spec'][j*n_sets+i]['cont']
             
             # spec_data[0, 0] == spec's lower-left (y_min, wave_min)
             # Set origin='lower', no need to flip.
-            # spec_data = np.flip(spec_data, axis=0)
-            # spec_var  = np.flip(spec_var,  axis=0)
-            # spec_mask = np.flip(spec_mask, axis=0)
-            
-            noise     = np.std(spec_data)
+
             line      = mock_data_info['spec'][j*n_sets+i]['meta']['line_species']
             im_spec = ax1.imshow(np.where(spec_mask, spec_data, np.nan), 
                                  extent=[mock_data_info['spec'][j*n_sets+i]['meta']['lambda_grid'][0, 0].value, # x_left
@@ -64,7 +39,6 @@ def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder):
                                          +mock_data_info['spec'][j*n_sets+i]['meta']['pixScale']*len(spec_data)/2], # y_top
                                  cmap='viridis', aspect='auto', 
                                  origin='lower', 
-                                #  vmin=0, vmax=0 + 5*noise
                                  )
             fig.colorbar(im_spec, ax=ax1)
             ax1.set_ylim(-mock_data_info['spec'][j*n_sets+i]['meta']['pixScale']*len(spec_data)/2,
@@ -75,11 +49,15 @@ def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder):
             ax1.grid(linestyle=':', color='white', alpha=0.5)
             ax1.set_title(f'Set {setnames[(j*n_sets+i)%3]}, Line: {line}')
             
-            specSNR = solve_snr(spec_data[spec_mask], spec_var[spec_mask], "spec")
+            spec_snr = snr_estimate(
+                    np.where(spec_mask, spec_data, np.nan),
+                    bkg_is_subtracted=False, 
+                    data_is_noisy=True, noise_var=np.mean(spec_var)
+                )
             ax1.text(0.02, 0.02, 
                      f'Min={np.min(spec_data[spec_mask]):.1f}'+'\n'+
                      f'Max={np.max(spec_data[spec_mask]):.1f}'+'\n'+
-                     f'Simple SNR={specSNR:.0f}', 
+                     f'Simple SNR={spec_snr:.0f}', 
                      fontsize=10, color='orangered', ha='left', va='bottom', 
                      transform=ax1.transAxes)
             
@@ -96,10 +74,9 @@ def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder):
         objDec     = mock_data_info['image']['meta']['Dec']
         ap_wcs     = mock_data_info['image']['meta']['ap_wcs']
         pixScale   = mock_data_info['image']['meta']['pixScale']
-        noise = np.std(image_data)
+        
         im_imag = ax2.imshow(np.where(image_mask, image_data, np.nan),  
                              cmap='viridis', aspect='equal', 
-                            #  vmin=0, vmax=0 + 5*noise
                              )
         fig.colorbar(im_imag, ax=ax2)
         
@@ -133,11 +110,15 @@ def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder):
                  transform=ax2.transAxes)
         ax1.text(1, 1, ax1txts, fontsize=7, color='orangered', ha='right', va='top', 
                  transform=ax1.transAxes)
-        
+
+        image_snr = snr_estimate(
+            np.where(image_mask, image_data, np.nan), 
+            bkg_is_subtracted=False, data_is_noisy=True, noise_var=np.mean(image_var)
+        )
         ax2.text(0.02, 0.02, 
                  f'Min = {np.nanmin(image_data[image_mask]):.1f}'+'\n'+
                  f'Max = {np.nanmax(image_data[image_mask]):.1f}'+'\n'+
-                 'SNR = '+f'{solve_snr(image_data[image_mask], image_var[image_mask], "image"):.0f}', 
+                 'SNR = '+f'{image_snr:.0f}', 
                  fontsize=10, color='orangered', ha='left', va='bottom', 
                  transform=ax2.transAxes)
         

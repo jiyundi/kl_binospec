@@ -1,0 +1,128 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+from core.find_snr  import snr_estimate
+from data_prep.plot import rot_rectangle
+
+
+def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder,
+                    setnames = ['A', 'C', 'B']):
+    n_sets   = len(setnames)
+    n_specs  = len(mock_data_info['spec'])
+    n_lines  = int(n_specs / n_sets)
+    
+    fig = plt.figure(figsize=(6*n_lines, 4*n_sets))  # (length, height)
+    plt.subplots_adjust(hspace=0.5, wspace=0.35) # h=height
+    gs = fig.add_gridspec(nrows=n_sets, ncols=(n_lines+1), 
+                          height_ratios=[1]*n_sets, 
+                          width_ratios=[1]*n_lines + [1.])
+    
+    colors = ['orangered', 'cyan', 'gold']
+    
+    # Spectra
+    for j in range(n_lines): # start with a column first
+        for i in range(n_sets):
+            ax1 = fig.add_subplot(gs[i, j])
+        
+            spec_data = mock_data_info['spec'][j*n_sets+i]['data']
+            spec_mask = mock_data_info['spec'][j*n_sets+i]['mask']
+            spec_var  = mock_data_info['spec'][j*n_sets+i]['var']
+            
+            # spec_data[0, 0] == spec's lower-left (y_min, wave_min)
+            # Set origin='lower', no need to flip.
+
+            line      = mock_data_info['spec'][j*n_sets+i]['meta']['line_species']
+            im_spec = ax1.imshow(np.where(spec_mask, spec_data, np.nan), 
+                                 extent=[mock_data_info['spec'][j*n_sets+i]['meta']['lambda_grid'][0, 0].value, # x_left
+                                         mock_data_info['spec'][j*n_sets+i]['meta']['lambda_grid'][0,-1].value, # x_right
+                                         -mock_data_info['spec'][j*n_sets+i]['meta']['pixScale']*len(spec_data)/2,  # y_bottom
+                                         +mock_data_info['spec'][j*n_sets+i]['meta']['pixScale']*len(spec_data)/2], # y_top
+                                 cmap='viridis', aspect='auto', 
+                                 origin='lower', 
+                                 )
+            fig.colorbar(im_spec, ax=ax1)
+            ax1.set_ylim(-mock_data_info['spec'][j*n_sets+i]['meta']['pixScale']*len(spec_data)/2,
+                         +mock_data_info['spec'][j*n_sets+i]['meta']['pixScale']*len(spec_data)/2)
+            ax1.xaxis.get_major_formatter().set_useOffset(False)
+            ax1.set_xlabel(r'Observed Wavelength $\lambda$ ($\AA$ or nm)')
+            ax1.set_ylabel(r'Spatial Position (arcsec)')
+            ax1.grid(linestyle=':', color='white', alpha=0.5)
+            ax1.set_title(f'Set {setnames[(j*n_sets+i)%3]}, Line: {line}')
+            
+            spec_snr = snr_estimate(
+                    np.where(spec_mask, spec_data, np.nan),
+                    bkg_is_subtracted=False, 
+                    data_is_noisy=True, noise_var=np.mean(spec_var)
+                )
+            ax1.text(0.02, 0.02, 
+                     f'Min={np.min(spec_data[spec_mask]):.1f}'+'\n'+
+                     f'Max={np.max(spec_data[spec_mask]):.1f}'+'\n'+
+                     f'Simple SNR={spec_snr:.0f}', 
+                     fontsize=10, color='orangered', ha='left', va='bottom', 
+                     transform=ax1.transAxes)
+            
+    # Imaging
+    for i in range(n_sets):
+        ax2 = fig.add_subplot(gs[i, -1], 
+                              projection=mock_data_info['image']['meta']['ap_wcs'])
+        
+        image_data = mock_data_info['image']['data']
+        image_mask = mock_data_info['image']['mask']
+        image_var  = mock_data_info['image']['var']
+        
+        objRA      = mock_data_info['image']['meta']['RA']
+        objDec     = mock_data_info['image']['meta']['Dec']
+        ap_wcs     = mock_data_info['image']['meta']['ap_wcs']
+        pixScale   = mock_data_info['image']['meta']['pixScale']
+        
+        im_imag = ax2.imshow(np.where(image_mask, image_data, np.nan),  
+                             cmap='viridis', aspect='equal', 
+                             )
+        fig.colorbar(im_imag, ax=ax2)
+        
+        # Draw slit position on the image (need to update with Set i)
+        slitRA     = mock_data_info['spec'][i]['meta']['slitRA'].value
+        slitDec    = mock_data_info['spec'][i]['meta']['slitDec'].value
+        slitLen    = mock_data_info['spec'][i]['meta']['slitLen']
+        slitWidth  = mock_data_info['spec'][i]['meta']['slitWidth']
+        slit_LPA   = mock_data_info['spec'][i]['meta']['slitLPA'].value
+        x0obj,  y0obj  = ap_wcs.wcs_world2pix([[objRA,  objDec ]], 0)[0]  
+        x0slit, y0slit = ap_wcs.wcs_world2pix([[slitRA, slitDec]], 0)[0]  
+        ax2.scatter(x0obj,  y0obj,  marker='x', s=360, color='black',   zorder=1)
+        ax2.scatter(x0slit, y0slit, marker='o', s=30,  color=colors[i], zorder=2)
+        rot_rectangle(ax2, x0slit, y0slit, slitWidth/pixScale, slitLen/pixScale, 
+                      (90-slit_LPA)/57.3, colors[i], '-')
+        
+        ax2.coords['ra' ].set_major_formatter('dd:mm:ss')
+        ax2.coords['dec'].set_major_formatter('dd:mm:ss')
+        ax2.set_xlabel('RA')
+        ax2.set_ylabel('Dec', labelpad=-1)
+        ax2.grid(linestyle=':', color='white', alpha=0.5)
+        ax2.set_title(f'Set {setnames[i]} imaging')
+        
+        ax1txts, ax2txts = '', ''
+        for key, arr in mock_data_info['par_fit'].items():
+            if key[:14] == 'shared_params-':
+                ax2txts += (key[14:] + ' = ' + '{:.3g}'.format(arr) + '\n')
+            elif key.split('-')[0] == 'line_params':
+                ax1txts += (key.split('-')[1] + ' = ' + '{:.0f}'.format(arr) + '\n')
+        ax2.text(1, 1, ax2txts, fontsize=7, color='orangered', ha='right', va='top', 
+                 transform=ax2.transAxes)
+        ax1.text(1, 1, ax1txts, fontsize=7, color='orangered', ha='right', va='top', 
+                 transform=ax1.transAxes)
+
+        image_snr = snr_estimate(
+            np.where(image_mask, image_data, np.nan), 
+            bkg_is_subtracted=False, data_is_noisy=True, noise_var=np.mean(image_var)
+        )
+        ax2.text(0.02, 0.02, 
+                 f'Min = {np.nanmin(image_data[image_mask]):.1f}'+'\n'+
+                 f'Max = {np.nanmax(image_data[image_mask]):.1f}'+'\n'+
+                 'SNR = '+f'{image_snr:.0f}', 
+                 fontsize=10, color='orangered', ha='left', va='bottom', 
+                 transform=ax2.transAxes)
+        
+    plt.savefig(f'{mock_folder}mock_{slit_name}_{iter_num:03d}.png', 
+                dpi=150, bbox_inches='tight')
+    return
+
