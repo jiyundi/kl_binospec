@@ -100,21 +100,9 @@ def prepare_a_slitspec(RA_obj, Dec_obj, Set, line, meta_gal, idx_line=0):
     LAMBDA_1D    = utils.build_1d_grid(spec_shape[1], lamb_disp) + lamb_0
     lambda_grid  = np.repeat([LAMBDA_1D], spec_shape[0], axis=0) * LAMBDA_1D.unit
 
-    # Optional: 
-    lpf_filenames = [
-        '../../scripts/binospec_pkl/LPF_slit_109_3.pkl', 
-        '../../scripts/binospec_pkl/LPF_slit_109_4.pkl', 
-        '../../scripts/binospec_pkl/LPF_slit_109_5.pkl', 
-        '../../scripts/binospec_pkl/LPF_slit_128_3.pkl', 
-        '../../scripts/binospec_pkl/LPF_slit_128_4.pkl', 
-        '../../scripts/binospec_pkl/LPF_slit_128_5.pkl', 
-    ]
-    with open(lpf_filenames[idx_lpf], "rb") as f:
-        line_profile_1, line_profile_2 = joblib.load(f)
-
     meta_spec = {
         'line_species':   line, 
-        'line_profile':   (line_profile_1, line_profile_2),
+        'line_profile':   None,
         'ngrid':          spec_shape,
         'lambda_grid':    lambda_grid, # nm, or *u.Angstrom,
         'pixScale':       spec_pix_scale,  # arcsec/px
@@ -137,14 +125,38 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
     
     meta_imag  = prepare_an_image(meta_gal['RA'], meta_gal['Dec'])
     params     = Parameters(line_species=emi_line_lst)
-    
+
+    # Optional: 
+    lpf_filenames = None
+    # lpf_filenames = [
+    #     '../../scripts/binospec_pkl/LPF_slit_109_3.pkl', 
+    #     '../../scripts/binospec_pkl/LPF_slit_109_4.pkl', 
+    #     '../../scripts/binospec_pkl/LPF_slit_109_5.pkl', 
+    #     '../../scripts/binospec_pkl/LPF_slit_128_3.pkl', 
+    #     '../../scripts/binospec_pkl/LPF_slit_128_4.pkl', 
+    #     '../../scripts/binospec_pkl/LPF_slit_128_5.pkl', 
+    # ]
+
     # 1. Spec
     spec_this_set = {}
     
     for i, line in enumerate(emi_line_lst):
-        meta_spec = prepare_a_slitspec(meta_gal['RA'], 
-                                       meta_gal['Dec'], 
-                                       Set, line, meta_gal, idx_line=i)
+        meta_spec = prepare_a_slitspec(
+            meta_gal['RA'], 
+            meta_gal['Dec'], 
+            Set, line, meta_gal, idx_line=i
+        )
+        
+        # Choose if LPFs are needed
+        if lpf_filenames is not None:
+            with open(lpf_filenames[i], "rb") as f:
+                line_profile_1, line_profile_2 = joblib.load(f)
+            meta_spec['line_profile'] = (line_profile_1, line_profile_2)
+            use_what_line_proflie     = 'meta'
+        else:
+            meta_spec['rhl']          = 1.0
+            meta_spec['line_profile'] = 'analytic'
+            use_what_line_proflie     = 'analytic'
         
         # Replace 'line' with 'O2_params', 'Ha_params', etc
         mock_params_keys, mock_params_deletedkeys = [], []
@@ -161,9 +173,11 @@ def make_mock_data(emi_line_lst, meta_gal, mockparams,
         for del_key in mock_params_deletedkeys:
             mock_params.pop(del_key)
         
-        spec_model   = SlitModel(obj_param=meta_gal, 
-                                 meta_param=meta_spec, 
-                                 use_what_line_proflie='meta')
+        spec_model   = SlitModel(
+            obj_param=meta_gal, 
+            meta_param=meta_spec, 
+            use_what_line_proflie=use_what_line_proflie
+        )
         
         updated_dict = params.gen_param_dict(mock_params_keys, 
                                              mock_params.values())
@@ -365,7 +379,7 @@ if __name__ == '__main__':
         To protect them, only when directly execute this script,
         the variables below will then be executed.
     """
-    mock_folder = 'mock_pkl_noisy_imgSNR40_specSNR05/'
+    mock_folder = 'mock_pkl_noisy_imgSNR40_specSNR05_idealLPF/'
     slitname = 0
     lines = ['Hb','Ha']
     

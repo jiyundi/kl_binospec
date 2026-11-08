@@ -389,8 +389,8 @@ if __name__ == "__main__":
         "--slitID",
         dest="slit_id",
         type=int,
-        default=9,
-        help="Mock slit index. Default: 9",
+        default=1,
+        help="Mock slit index. Default: 1",
     )
 
     parser.add_argument(
@@ -423,7 +423,8 @@ if __name__ == "__main__":
     # Paths: edit these directly when necessary
     # -----------------------------------------------------------------------
 
-    mock_folder = Path("mock_pkl_noisy_imgSNR40_specSNR05/pkl")
+    mock_folder = Path("mock_pkl_noisy_imgSNR40_specSNR30_idealLPF/pkl")
+    use_what_line_proflie = "analytic" #, "meta"
 
     fiducial_yaml = Path(
         "binospec_fid_params.yaml"
@@ -646,7 +647,7 @@ if __name__ == "__main__":
         fiducial_params,
         log10_Mstar=data_info["galaxy"]["log10_Mstar"],
         log10_Mstar_err=data_info["galaxy"]["log10_Mstar_err"],
-        use_what_line_proflie="meta",
+        use_what_line_proflie=use_what_line_proflie,
     )
 
     nautilus_sampler = NautilusSampler(

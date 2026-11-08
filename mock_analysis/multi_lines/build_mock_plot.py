@@ -124,5 +124,6 @@ def make_exam_plots(mock_data_info, slit_name, iter_num, mock_folder,
         
     plt.savefig(f'{mock_folder}mock_{slit_name}_{iter_num:03d}.png', 
                 dpi=150, bbox_inches='tight')
+    plt.close()
     return
 

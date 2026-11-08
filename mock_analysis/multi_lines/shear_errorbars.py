@@ -18,6 +18,11 @@ plt.rcParams.update(
 )
 
 
+def cosi_to_deg(cosi):
+    return np.degrees(np.arccos(np.clip(cosi, 0.0, 1.0)))
+
+def deg_to_cosi(i_deg):
+    return np.cos(np.radians(i_deg))
 
 def posterior_log_densities(slit_folder, pars_to_plot, grid):
     samples = np.loadtxt(f'{slit_folder}post.txt', dtype=str, ndmin=2)
@@ -34,7 +39,6 @@ def posterior_log_densities(slit_folder, pars_to_plot, grid):
         log_densities.append(kde.logpdf(grid))
 
     return np.array(log_densities)
-
 
 def geometric_mean_quantiles(log_densities, grid):
     # Average log densities across fits before exponentiating.
@@ -53,12 +57,17 @@ if __name__ == "__main__":
 
     # User input: mock and runs folder
     plot_title_prefix = ''
-    mock_folder = './mock_pkl_noisy_imgSNR40_specSNR30/pkl/'
-    runs_folders = ['runs_noisy_imgSNR40_specSNR30/', 'runs_noisy_imgSNR40_specSNR05/'] # 'runs_no_noise/', 
-    colors = ['crimson', 'darkorange', 'black', 'royalblue', 'limegreen']
+    mock_folder = './mock_pkl_noisy_imgSNR40_specSNR05_idealLPF/pkl/'
+    runs_folders = [
+        'imgSNR40_specSNR30_idealLPF/',
+        'imgSNR40_specSNR30/', 
+        'imgSNR40_specSNR05_idealLPF/', 
+        'imgSNR40_specSNR05/'
+    ]
+    colors = ['crimson', 'lightcoral', 'purple', 'violet', 'black', 'royalblue', 'limegreen']
 
     # User input: Specify x-axis: 'cosi' or 'theta_int'
-    xaxis_param = 'theta_int' # , 'cosi'
+    xaxis_param = 'cosi' # 'theta_int', 
 
     # User input: slit num definition
     slit_names = np.arange(1, 30+1)
@@ -147,17 +156,17 @@ if __name__ == "__main__":
             raise ValueError(f'{xaxis_param}={xvalue:g}: mock shear truths differ')
 
     # Plot
-    fig = plt.figure(figsize=(6, 3*len(pars_to_plot)))  # (length, height)
-    plt.subplots_adjust(hspace=0.4, wspace=0.2) # h=height
+    fig = plt.figure(figsize=(6, 3*len(pars_to_plot)), layout='constrained') # (length, height)
+    # plt.subplots_adjust(hspace=0.4, wspace=0.2) # h=height
     gs = fig.add_gridspec(nrows=len(pars_to_plot), ncols=1, 
                         height_ratios=[1]*len(pars_to_plot), 
                         width_ratios=[1]*1)
             
     for idx_par, par_to_plot in enumerate(pars_to_plot):
         ax1 = fig.add_subplot(gs[idx_par, 0])
-        ax1.set_title(plot_title_prefix + par_to_plot, fontsize=12)
         
-        ax1.set_ylabel('Fit - Mock param')
+        
+        ax1.set_ylabel(f'{plot_title_prefix}'+f'{par_to_plot}: measured - true')
         ax1.set_xlabel(xaxis_label, labelpad=0)
 
         ax1.axhline(y=0, color='forestgreen', linestyle='--', linewidth=2)
@@ -190,15 +199,25 @@ if __name__ == "__main__":
 
         if xaxis_param == 'cosi':
             ax1.text(
-                0.99, 0.01, r'More edge-on $\rightarrow$', 
+                0.99, 0.01, r'More face-on $\rightarrow$', 
                 color='gray', ha='right', va='bottom', 
                 transform=ax1.transAxes
                 )
+
+            # Secondary axis: i (inclination angle; deg)
+            ax1.set_xlim(0.0, 1.0)  # 让上轴显示完整的 90° 到 0°
+            ax_top = ax1.secondary_xaxis(
+                'top', functions=(cosi_to_deg, deg_to_cosi)
+            )
+            ax_top.set_xlabel(r'Inclination $i$')
+            ax_top.set_xticks(cosi_to_deg(xaxis_unique))
+            ax_top.xaxis.set_major_formatter('{x:.1f}°')
+
         ax1.legend(prop={'size': 10}, loc='upper right')
         ax1.set_xticks(xaxis_unique)
         ax1.set_ylim(ylims[idx_par])
 
-    fig.savefig(f'shape_noise_errorbars_{xaxis_param}.png', dpi=150, bbox_inches='tight')
+    fig.savefig(f'shear_bias_vs_{xaxis_param}.png', dpi=150, bbox_inches='tight')
     plt.close()
 
     # ===============================================================
@@ -220,18 +239,21 @@ if __name__ == "__main__":
                 color=colors[run_num % len(colors)], label=folder_name,
             )
 
-            # for x, y, g1err, g2err in zip(xaxis_unique, epsilon_err, yerr_1, yerr_2): 
-            #     ax_eps.text(
-            #         x, y-0.002, f'{g1err:.3f}\n{g2err:.3f}', 
-            #         ha='center', va='top', size=8
-            #     )
+        # Secondary axis: i (inclination angle; deg)
+        ax_eps.set_xlim(0.0, 1.0)  # 让上轴显示完整的 90° 到 0°
+        ax_top = ax_eps.secondary_xaxis(
+            'top', functions=(cosi_to_deg, deg_to_cosi)
+        )
+        ax_top.set_xlabel(r'Inclination $i$')
+        ax_top.set_xticks(cosi_to_deg(xaxis_unique))
+        ax_top.xaxis.set_major_formatter('{x:.1f}°')
 
         ax_eps.set_xlabel(xaxis_label)
         ax_eps.set_ylabel(r'Shape noise $\sigma_\epsilon = \sqrt{(\sigma^2_{g1} + \sigma^2_{g2})/2}$')
         ax_eps.set_xticks(xaxis_unique)
         ax_eps.set_ylim(bottom=0)
         ax_eps.grid(linestyle=':', alpha=0.5)
-        ax_eps.legend()
+        ax_eps.legend(prop={'size': 8})
         fig_eps.savefig('shape_noise_vs_cosi.png', dpi=150, bbox_inches='tight')
         plt.close(fig_eps)
     
