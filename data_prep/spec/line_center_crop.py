@@ -26,6 +26,7 @@ class EmissionProcessor:
             # Step 1.1 - 1D Gaussian 初步拟合中心
             row, params = fitter.fit_1d(np.where(spec['mask'], spec['flux'], 
                                                  np.std(spec['flux'][spec['mask']])), 
+                                        wave_per_pixel=np.mean(np.diff(spec['wave'][0])),
                                         x0_fixed=idx_xs[i], 
                                         y0_fixed=idx_ys[i])
             if params is None:
@@ -131,7 +132,7 @@ class EmissionLineFitter:
         return yy1 + yy2
 
     # ---------- 一维拟合 ----------
-    def fit_1d(self, flux_2d, x0_fixed=None, y0_fixed=None):
+    def fit_1d(self, flux_2d, wave_per_pixel=None, x0_fixed=None, y0_fixed=None):
         """在每一行上进行1D Gaussian拟合以找到最亮位置。"""
         spat_len, wave_len = flux_2d.shape
         best_sum = 0
@@ -140,7 +141,8 @@ class EmissionLineFitter:
         
         if self.line == "O2":
             delta_wav = self.this_line_waves[-1] - self.this_line_waves[0]
-            wave_per_pixel = np.mean(np.diff(xx))
+            if wave_per_pixel is None or not np.isfinite(wave_per_pixel) or wave_per_pixel <= 0:
+                raise ValueError("O2 fitting requires a positive wavelength step in Angstrom/pixel")
             delta_pix = delta_wav * (1 + self.redshift) / wave_per_pixel
             self.delta_pix = delta_pix
         
