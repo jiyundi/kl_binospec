@@ -49,8 +49,8 @@ from core.find_bkg import bkg_estimate
 from core.find_snr import snr_estimate
 from core.var_snr_match import find_background_variance
 from klm.line_profile_extraction import (
-    exam_line_profile_A,
-    extract_asymmetric_lpf_A,
+    plot_lpf_diagnostics,
+    fit_asymmetric_line_profiles,
 )
 from klm.nautilus_sampler import NautilusSampler
 from klm.parameters import Parameters
@@ -663,20 +663,20 @@ if __name__ == "__main__":
 
     # Reference line profile from the noise-free spectrum.
     amp_reference, mean_reference, sigma_left_reference, \
-        sigma_right_reference = extract_asymmetric_lpf_A(
+        sigma_right_reference = fit_asymmetric_line_profiles(
             data_info["spec"][0]["data"] - data_info["fid_params"]["Hb_params"]["bkg_level"],
             spec_wave,
             line="Hb",
         )
 
     # Line profile extracted from the noisy spectrum.
-    amp, mean, sigma_left, sigma_right = extract_asymmetric_lpf_A(
+    amp, mean, sigma_left, sigma_right = fit_asymmetric_line_profiles(
         spec_data,
         spec_wave,
         line="Hb",
     )
 
-    _restored, _residual = exam_line_profile_A(
+    _restored, _residual = plot_lpf_diagnostics(
         (amp, mean, sigma_left, sigma_right),
         spec_data,
         spec_mask,

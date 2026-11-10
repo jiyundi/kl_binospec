@@ -6,7 +6,7 @@ The script performs the following steps:
 1. Load a mock observation.
 2. Add image and spectral noise.
 3. Apply synthetic masks to the image.
-4. Extract asymmetric H-beta line profiles.
+4. Extract asymmetric line profiles.
 5. Run the Nautilus sampler.
 6. Save posterior summaries.
 7. Plot the best-fitting model and posterior distributions.
@@ -36,21 +36,21 @@ import json
 import time
 from pathlib import Path
 
-import astropy.units as u
 import galsim
 import joblib
 import numpy as np
 import yaml
-from scipy.stats import gaussian_kde
 
 from core.fitting_result_utils import complete_flattened_fit_params
 from core.make_config_dic import make_config_dic
+from core.plot_corner import plot_corner
 from core.post_fitting import plot_obs_fit_res
-from core.find_snr import snr_estimate
-from core.var_snr_match import find_background_variance
+from core.find_post_mode import weighted_kde_mode
+from core.find_post_median import weighted_median
+
 from klm.line_profile_extraction import (
-    exam_line_profile_A,
-    extract_asymmetric_lpf_A,
+    plot_lpf_diagnostics,
+    fit_asymmetric_line_profiles,
 )
 from klm.nautilus_sampler import NautilusSampler
 from klm.parameters import Parameters
@@ -70,126 +70,6 @@ plt.rcParams.update(
         "font.serif": ["Helvetica", "Arial", "DejaVu Sans"],
     }
 )
-
-
-# ---------------------------------------------------------------------------
-# Plotting utilities
-# ---------------------------------------------------------------------------
-
-def plot_image(
-    data,
-    mask,
-    plotname="image.png",
-    increasing_ra=False,
-    increasing_dec=True,
-):
-    """Plot a masked two-dimensional image.
-
-    Parameters
-    ----------
-    data : numpy.ndarray
-        Two-dimensional image data.
-    mask : numpy.ndarray
-        Boolean mask in which True indicates a valid pixel.
-    plotname : str or pathlib.Path
-        Output filename.
-    increasing_ra : bool
-        Whether rightward movement corresponds to increasing RA.
-    increasing_dec : bool
-        Whether upward movement corresponds to increasing Dec.
-    """
-
-    fig, ax = plt.subplots(figsize=(4, 3))
-
-    image = ax.imshow(
-        np.where(mask, data, np.nan),
-        aspect="auto",
-        cmap="viridis",
-        origin="lower",
-    )
-
-    ax.set_xlabel(
-        "Increasing RA -->" if increasing_ra else "Decreasing RA -->"
-    )
-    ax.set_ylabel(
-        "Increasing Dec -->" if increasing_dec else "Decreasing Dec -->"
-    )
-
-    fig.colorbar(image, ax=ax)
-    fig.tight_layout()
-    fig.savefig(plotname, dpi=150)
-    plt.close(fig)
-
-
-def plot_spectrum(data, mask, wave=None, plotname="spectrum.png"):
-    """Plot a masked two-dimensional slit spectrum.
-
-    Parameters
-    ----------
-    data : numpy.ndarray
-        Two-dimensional spectral data.
-    mask : numpy.ndarray
-        Boolean mask in which True indicates a valid pixel.
-    wave : numpy.ndarray or astropy.units.Quantity, optional
-        Two-dimensional wavelength grid.
-    plotname : str or pathlib.Path
-        Output filename.
-    """
-
-    fig, ax = plt.subplots(figsize=(4, 3))
-
-    if wave is None:
-        image = ax.imshow(
-            np.where(mask, data, np.nan),
-            aspect="auto",
-            cmap="viridis",
-            origin="lower",
-        )
-        ax.set_xlabel("Wavelength pixels")
-
-    else:
-        wave_values = wave.value if isinstance(wave, u.Quantity) else wave
-
-        if wave_values.shape != data.shape:
-            raise ValueError(
-                "The wavelength grid and spectrum must have the same shape. "
-                f"Received {wave_values.shape} and {data.shape}."
-            )
-
-        spatial_grid = np.broadcast_to(
-            np.arange(data.shape[0])[:, None],
-            data.shape,
-        )
-
-        masked_data = np.ma.array(
-            data,
-            mask=(~np.isfinite(data) | ~mask),
-        )
-
-        color_map = plt.colormaps["viridis"].copy()
-        color_map.set_bad("white")
-
-        image = ax.pcolormesh(
-            wave_values,
-            spatial_grid,
-            masked_data,
-            cmap=color_map,
-            shading="auto",
-        )
-
-        ax.set_xlabel(f"Wavelength (N={wave_values.shape[1]} px)")
-
-    ax.set_ylabel("Slit spatial pixels")
-    ax.grid(
-        linestyle="--",
-        color="silver",
-        alpha=0.25,
-    )
-
-    fig.colorbar(image, ax=ax)
-    fig.tight_layout()
-    fig.savefig(plotname, dpi=150)
-    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -308,59 +188,6 @@ def circular_maskout(
         circular_mask |= circular_region
 
     return ~circular_mask
-
-
-# ---------------------------------------------------------------------------
-# Posterior statistics
-# ---------------------------------------------------------------------------
-
-def weighted_median(values, weights):
-    """Calculate a one-dimensional weighted median."""
-
-    order = np.argsort(values)
-
-    sorted_values = values[order]
-    sorted_weights = weights[order]
-    cumulative_weights = np.cumsum(sorted_weights)
-
-    return np.interp(
-        0.5,
-        cumulative_weights,
-        sorted_values,
-    )
-
-
-def weighted_kde_mode(values, weights, grid_size=200):
-    """Estimate a marginal posterior mode using a weighted KDE."""
-
-    values = np.asarray(values)
-
-    # gaussian_kde fails if all values are identical.
-    if np.allclose(values, values[0]):
-        return values[0]
-
-    kde = gaussian_kde(
-        values,
-        weights=weights,
-        bw_method="scott",
-    )
-
-    evaluation_grid = np.linspace(
-        values.min(),
-        values.max(),
-        grid_size,
-    )
-
-    density = kde(evaluation_grid)
-
-    return evaluation_grid[np.argmax(density)]
-
-
-
-
-
-
-
 
 
 
@@ -499,20 +326,6 @@ if __name__ == "__main__":
         data_info["fid_params"]["shared_params"]["cosi"],
     )
 
-    # Print noise-free SNRs
-    # image_snr = snr_estimate(
-    #     data_info["image"]["data"], 
-    #     bkg_is_subtracted=False, data_is_noisy=False
-    # )
-    # spec_snr  = snr_estimate(
-    #     data_info["spec"][spec_idx]["data"], 
-    #     restore_CCD_flux=True,
-    #     mock_bkg=data_info["fid_params"]["line_params"]["bkg_level"], 
-    #     bkg_is_subtracted=True, data_is_noisy=False
-    # )
-    # print("Image S/N without noise =", round(image_snr, 1))
-    # print("Spec  S/N without noise =", round(spec_snr,  1))
-
     # -----------------------------------------------------------------------
     # 1.1 Extract the asymmetric line profiles for all lines
     # -----------------------------------------------------------------------
@@ -520,13 +333,13 @@ if __name__ == "__main__":
     for spec_idx in range(len(data_info["spec"])):
     
         # Line profile extracted from the noisy spectrum.
-        amp, mean, sigma_left, sigma_right = extract_asymmetric_lpf_A(
+        amp, mean, sigma_left, sigma_right = fit_asymmetric_line_profiles(
             data_info["spec"][spec_idx]["data"],
             data_info["spec"][spec_idx]["meta"]["lambda_grid"],
             line=data_info["spec"][spec_idx]["meta"]["line_species"],
         )
 
-        exam_line_profile_A(
+        plot_lpf_diagnostics(
             (amp, mean, sigma_left, sigma_right),
             data_info["spec"][spec_idx]["data"],
             data_info["spec"][spec_idx]["mask"],
@@ -536,95 +349,6 @@ if __name__ == "__main__":
                 diagnostic_folder / f"LPF_mock_{special_indices[slit_id-1]}_line{spec_idx}.png"
             )
         )
-
-        # # First asymmetric Gaussian component.
-        # amp_1 = amp[:, 0].copy()
-        # mean_1 = mean[:, 0]
-        # sigma_left_1 = sigma_left[:, 0]
-        # sigma_right_1 = sigma_right[:, 0]
-
-        # # Second asymmetric Gaussian component.
-        # amp_2 = amp[:, 1].copy()
-        # mean_2 = mean[:, 1]
-        # sigma_left_2 = sigma_left[:, 1]
-        # sigma_right_2 = sigma_right[:, 1]
-
-        # # Normalize the amplitudes.
-        # if np.any(np.isfinite(amp_1)):
-        #     maximum_amp_1 = np.nanmax(amp_1)
-
-        #     if maximum_amp_1 > 0:
-        #         amp_1 /= maximum_amp_1
-
-        # if np.any(np.isfinite(amp_2)):
-        #     maximum_amp_2 = np.nanmax(amp_2)
-
-        #     if maximum_amp_2 > 0:
-        #         amp_2 /= maximum_amp_2
-
-        # # Rows with invalid amplitudes are marked as unreliable.
-        # reliability_mask = (
-        #     np.isfinite(amp_1)
-        #     & np.isfinite(amp_2)
-        # )
-
-        # amp_1[~reliability_mask] = 0.0
-        # amp_2[~reliability_mask] = 0.0
-
-        # line_profile_1 = {
-        #     "amp": amp_1,
-        #     "mean": mean_1,
-        #     "std_left": sigma_left_1,
-        #     "std_right": sigma_right_1,
-        #     "reliability": reliability_mask,
-        #     "bkg": np.zeros_like(amp_1),
-        # }
-
-        # line_profile_2 = {
-        #     "amp": amp_2,
-        #     "mean": mean_2,
-        #     "std_left": sigma_left_2,
-        #     "std_right": sigma_right_2,
-        #     "reliability": reliability_mask,
-        #     "bkg": np.zeros_like(amp_2),
-        # }
-
-        # data_info["spec"][spec_idx]["meta"]["line_profile"] = (
-        #     line_profile_1,
-        #     line_profile_2,
-        # )
-
-        # DEBUG USE ONLY
-        # import matplotlib.pyplot as plt
-        # fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(6,2)) # (width, height)
-        # yy1 = data_info["spec"][spec_idx]["meta"]["line_profile"][0]['std_left']
-        # ax[0].plot(np.arange(len(yy1)), yy1, label='new: std_left')
-
-        # lpf_filenames = [
-        #     '../../scripts/binospec_pkl/LPF_slit_109_3.pkl', 
-        #     '../../scripts/binospec_pkl/LPF_slit_109_4.pkl', 
-        #     '../../scripts/binospec_pkl/LPF_slit_109_5.pkl', 
-        #     '../../scripts/binospec_pkl/LPF_slit_128_3.pkl', 
-        #     '../../scripts/binospec_pkl/LPF_slit_128_4.pkl', 
-        #     '../../scripts/binospec_pkl/LPF_slit_128_5.pkl', 
-        # ]
-        # with open(lpf_filenames[spec_idx], "rb") as f:
-        #     lpf1, _ = joblib.load(f)
-        # ax[0].plot(np.arange(len(lpf1['std_left'])), lpf1['std_left'], label='old: std_left')
-
-        # yy3 = data_info["spec"][spec_idx]["meta"]["line_profile"][0]['std_right']
-        # ax[1].plot(np.arange(len(yy3)), yy3, label='new: std_right')
-        # ax[1].plot(np.arange(len(lpf1['std_right'])), lpf1['std_right'], label='old: std_right')
-
-        # yy5 = data_info["spec"][spec_idx]["meta"]["line_profile"][0]['amp']
-        # ax[2].plot(np.arange(len(yy5)), yy5, label='new: amp')
-        # ax[2].plot(np.arange(len(lpf1['amp'])), lpf1['amp'], label='old: amp')
-
-        # plt.tight_layout()
-        # ax[0].legend()
-        # ax[1].legend()
-        # ax[2].legend()
-        # plt.savefig(f'test{spec_idx}.jpg')
 
     # -----------------------------------------------------------------------
     # 2. Load the fitting configuration
@@ -872,35 +596,6 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------
 
     if not is_test:
-        from core.plot_corner import plot_corner
-
-        # Calibrate v_0 because DEIMOS and Binospec use different
-        # definitions of the H-beta reference wavelength.
-        # SPEED_OF_LIGHT_KMS = 299_792.458
-
-        # HB_WAVELENGTH_DEIMOS = 486.1333 * u.nm
-        # HB_WAVELENGTH_BINOSPEC = 4862.683 * u.Angstrom
-
-        # wavelength_shift = (
-        #     HB_WAVELENGTH_DEIMOS
-        #     - HB_WAVELENGTH_BINOSPEC
-        # )
-
-        # velocity_shift_kms = (
-        #     SPEED_OF_LIGHT_KMS
-        #     * wavelength_shift
-        #     / HB_WAVELENGTH_BINOSPEC
-        # ).decompose().value
-
-        # v0_deimos = data_info["fid_params"]["line_params"]["v_0"]
-
-        # corrected_v0 = v0_deimos + velocity_shift_kms
-
-        # print(
-        #     "Corrected DEIMOS v_0 using the Binospec H-beta "
-        #     f"definition: {corrected_v0} km/s"
-        # )
-
         true_values = [
             data_info["fid_params"]["shared_params"]["g1"],
             data_info["fid_params"]["shared_params"]["g2"],
@@ -926,8 +621,6 @@ if __name__ == "__main__":
             data_info["fid_params"]["line_params"]["dx_vel"],
             data_info["fid_params"]["line_params"]["dx_vel"],
             data_info["fid_params"]["line_params"]["dx_vel"],
-            # 1,
-            # 1,
         ]
 
         plot_corner(

@@ -49,8 +49,8 @@ from core.post_fitting import plot_obs_fit_res
 from core.find_snr import snr_estimate
 from core.var_snr_match import find_background_variance
 from klm.line_profile_extraction import (
-    exam_line_profile_A,
-    extract_asymmetric_lpf_A,
+    plot_lpf_diagnostics,
+    fit_asymmetric_line_profiles,
 )
 from klm.nautilus_sampler import NautilusSampler
 from klm.parameters import Parameters
@@ -519,13 +519,13 @@ if __name__ == "__main__":
     for spec_idx in range(len(data_info["spec"])):
     
         # Line profile extracted from the noisy spectrum.
-        amp, mean, sigma_left, sigma_right = extract_asymmetric_lpf_A(
+        amp, mean, sigma_left, sigma_right = fit_asymmetric_line_profiles(
             data_info["spec"][spec_idx]["data"],
             data_info["spec"][spec_idx]["meta"]["lambda_grid"],
             line=data_info["spec"][spec_idx]["meta"]["line_species"],
         )
 
-        exam_line_profile_A(
+        plot_lpf_diagnostics(
             (amp, mean, sigma_left, sigma_right),
             data_info["spec"][spec_idx]["data"],
             data_info["spec"][spec_idx]["mask"],

@@ -2,11 +2,10 @@ import warnings
 import numpy as np
 import astropy.units as u
 from scipy.optimize import curve_fit
-import matplotlib.pyplot as plt
 
 
 def two_half_gaussians(x, amp, mu, sigma_left, sigma_right):
-    """单个非对称 Gaussian；x、mu、sigma 均以 Å 的数值表示。"""
+    """Evaluate a split Gaussian using wavelength values in angstroms."""
     sigma = np.where(x < mu, sigma_left, sigma_right)
     return amp * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
 
@@ -14,7 +13,7 @@ def two_half_gaussians(x, amp, mu, sigma_left, sigma_right):
 def asymmetric_doublet(x,
                        amp1, mu1, sigma1_left, sigma1_right,
                        amp2, dmu, sigma2_left, sigma2_right):
-    """非对称双峰，其中 mu2 = mu1 + dmu。"""
+    """Evaluate an asymmetric doublet with mu2 = mu1 + dmu."""
     mu2 = mu1 + dmu
 
     return (
@@ -27,7 +26,45 @@ def asymmetric_doublet(x,
     )
 
 
-def extract_asymmetric_lpf_A(
+def _as_angstrom_values(value):
+    """Convert a wavelength quantity to angstroms or accept values in angstroms."""
+    if isinstance(value, u.Quantity):
+        return value.to_value(u.Angstrom)
+    return np.asarray(value, dtype=float)
+
+
+def _average_neighboring_rows(data, wave, y):
+    """Interpolate three neighboring rows onto row y's grid and average them."""
+    row_indices = np.clip([y - 1, y, y + 1], 0, data.shape[0] - 1)
+    x_reference = wave[y]
+    interpolated_rows = []
+
+    for row in row_indices:
+        wave_row = wave[row]
+        flux_row = data[row]
+        valid = np.isfinite(wave_row) & np.isfinite(flux_row)
+        if np.count_nonzero(valid) < 2:
+            continue
+
+        wave_valid = wave_row[valid]
+        flux_valid = flux_row[valid]
+        # Sort the wavelengths before dropping duplicates for interpolation.
+        order = np.argsort(wave_valid)
+        wave_valid, unique_idx = np.unique(wave_valid[order], return_index=True)
+        flux_valid = flux_valid[order][unique_idx]
+        interpolated_rows.append(
+            np.interp(x_reference, wave_valid, flux_valid, left=np.nan, right=np.nan)
+        )
+
+    if not interpolated_rows:
+        return None
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        return np.nanmean(interpolated_rows, axis=0)
+
+
+def fit_asymmetric_line_profiles(
         data,
         wavelength,
         line,
@@ -35,61 +72,53 @@ def extract_asymmetric_lpf_A(
         sigma_bounds_pix=(1.0, 20.0),
         separation_bounds_pix=(4.0, 12.0),
         initial_sigma_pix=3.0):
-    """
-    每个空间位置取相邻三行平均，并根据 line 进行单峰或双峰拟合。
+    """Fit an asymmetric single line or doublet at each spatial row.
+
+    Each fit averages three rows on the central row's wavelength grid.
+    At the edges, the outermost row is used twice.
 
     Parameters
     ----------
     data : ndarray, shape (ny, nx)
-        二维光谱数据。
-
-    wavelength : Quantity or ndarray, shape (nx,)
-        每个光谱像素对应的波长。若不是 Quantity，默认单位为 Å。
-
+        Two-dimensional spectrum.
+    wavelength : Quantity or ndarray, shape (ny, nx)
+        Wavelength at each spatial and spectral pixel. Plain arrays use angstroms.
     line : str
-        谱线名称；位于 doublets 中时使用双峰，否则使用单峰。
-
+        Line name. Names in doublets use the doublet model.
     doublets : sequence of str
-        使用双峰模型的谱线名称。
-
-    sigma_bounds_pix : tuple
-        左右翼 sigma 的像素尺度上下限，内部自动转换为 Å。
-
-    separation_bounds_pix : tuple
-        双峰间距的像素尺度上下限，内部自动转换为 Å。
+        Line names that use the doublet model.
+    sigma_bounds_pix, separation_bounds_pix : tuple of float
+        Bounds on the wing widths and doublet separation in spectral pixels.
+        They are converted to angstroms using the median wavelength spacing.
+    initial_sigma_pix : float
+        Initial width for each wing, in spectral pixels.
 
     Returns
     -------
-    Amp : ndarray, shape (ny, 2)
-        两个峰的振幅。单峰拟合的第二列为 0。
-
-    Mu : Quantity, shape (ny, 2)
-        峰中心，单位为 u.Angstrom。单峰第二列为 NaN。
-
-    sigma_left, sigma_right : Quantity, shape (ny, 2)
-        两个峰的左右翼宽度，单位为 u.Angstrom。
+    amp : ndarray, shape (ny, 2)
+        Peak amplitudes.
+    mu, sigma_left, sigma_right : Quantity, shape (ny, 2)
+        Peak centers and left and right wing widths in angstroms.
+        For a successful single-line fit, the unused center is NaN and the
+        unused amplitude and widths are zero. Failed rows are all NaN.
     """
     data = np.asarray(data, dtype=float)
 
     if data.ndim != 2:
-        raise ValueError("data 必须是 shape (ny, nx) 的二维数组")
+        raise ValueError("data must be a two-dimensional array with shape (ny, nx)")
 
     ny, nx = data.shape
 
-    # 波长统一转换为 Å 的浮点数，curve_fit 内部不直接处理 Quantity
-    if isinstance(wavelength, u.Quantity):
-        wave = wavelength.to_value(u.Angstrom)
-    else:
-        wave = np.asarray(wavelength, dtype=float)
+    wave = _as_angstrom_values(wavelength)
 
     if wave.shape != (ny, nx):
-        raise ValueError("wavelength 必须是与 data 相同的 shape (ny, nx)")
+        raise ValueError("wavelength must have the same shape (ny, nx) as data")
 
-    # 所有行的典型波长采样间隔
+    # Use the typical wavelength spacing across all rows.
     delta_lambda = np.nanmedian(np.abs(np.diff(wave, axis=1)))
 
     if not np.isfinite(delta_lambda) or delta_lambda <= 0:
-        raise ValueError("无法确定有效的波长采样间隔")
+        raise ValueError("Cannot determine a finite, positive wavelength spacing")
 
     min_sigma = sigma_bounds_pix[0] * delta_lambda
     max_sigma = sigma_bounds_pix[1] * delta_lambda
@@ -99,10 +128,10 @@ def extract_asymmetric_lpf_A(
     max_separation = separation_bounds_pix[1] * delta_lambda
 
     if min_sigma <= 0 or max_sigma <= min_sigma:
-        raise ValueError("sigma_bounds_pix 设置不正确")
+        raise ValueError("sigma_bounds_pix must be positive and strictly increasing")
 
     if min_separation <= 0 or max_separation <= min_separation:
-        raise ValueError("separation_bounds_pix 设置不正确")
+        raise ValueError("separation_bounds_pix must be positive and strictly increasing")
 
     use_doublet = line in doublets
     function_this_line = (
@@ -117,50 +146,10 @@ def extract_asymmetric_lpf_A(
 
     for y in range(ny):
 
-        # 始终使用三行；边界处重复最外侧行
-        row_indices = np.clip([y - 1, y, y + 1], 0, ny - 1)
-
-        # 以当前行的波长轴作为三行平均的公共网格
         x_reference = wave[y]
-        interpolated_rows = []
-
-        for row in row_indices:
-            wave_row = wave[row]
-            flux_row = data[row]
-
-            valid_row = np.isfinite(wave_row) & np.isfinite(flux_row)
-            if np.count_nonzero(valid_row) < 2:
-                continue
-
-            wave_valid = wave_row[valid_row]
-            flux_valid = flux_row[valid_row]
-
-            # np.interp 要求插值波长递增
-            order = np.argsort(wave_valid)
-            wave_valid = wave_valid[order]
-            flux_valid = flux_valid[order]
-
-            # 删除重复的波长点
-            wave_valid, unique_idx = np.unique(
-                wave_valid, return_index=True
-            )
-            flux_valid = flux_valid[unique_idx]
-
-            interpolated = np.interp(
-                x_reference,
-                wave_valid,
-                flux_valid,
-                left=np.nan,
-                right=np.nan,
-            )
-            interpolated_rows.append(interpolated)
-
-        if not interpolated_rows:
+        profile = _average_neighboring_rows(data, wave, y)
+        if profile is None:
             continue
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            profile = np.nanmean(interpolated_rows, axis=0)
 
         valid = np.isfinite(x_reference) & np.isfinite(profile)
 
@@ -170,12 +159,12 @@ def extract_asymmetric_lpf_A(
         x = x_reference[valid]
         flux = profile[valid]
 
-        # 按波长排序，保证左右翼定义稳定
+        # Sort by wavelength so the wings follow increasing wavelength.
         order = np.argsort(x)
         x = x[order]
         flux = flux[order]
 
-        # 当前模型不含背景项，因此先减去中值背景
+        # Subtract the median background before fitting the line-only model.
         background = np.nanmedian(flux)
         flux = flux - background
 
@@ -185,7 +174,7 @@ def extract_asymmetric_lpf_A(
         wave_min = np.nanmin(x)
         wave_max = np.nanmax(x)
 
-        # 避免中心紧贴拟合范围边缘
+        # Keep the line center away from the edges of the fitting window.
         center_margin = 2.0 * delta_lambda
         center_low = wave_min + center_margin
         center_high = wave_max - center_margin
@@ -194,39 +183,22 @@ def extract_asymmetric_lpf_A(
             continue
 
         if not use_doublet:
-            # ---------------- 单峰 ----------------
+            # Single line
             peak_idx = np.nanargmax(flux)
 
             amp0 = max(flux[peak_idx], 1e-3)
             mu0 = np.clip(x[peak_idx], center_low, center_high)
 
-            p0 = [
-                amp0,
-                mu0,
-                sigma0,
-                sigma0,
-            ]
-
-            lower_bounds = [
-                0.0,
-                center_low,
-                min_sigma,
-                min_sigma,
-            ]
-
-            upper_bounds = [
-                np.inf,
-                center_high,
-                max_sigma,
-                max_sigma,
-            ]
+            p0 = [amp0, mu0, sigma0, sigma0]
+            lower_bounds = [0.0, center_low, min_sigma, min_sigma]
+            upper_bounds = [np.inf, center_high, max_sigma, max_sigma]
 
         else:
-            # ---------------- 双峰 ----------------
+            # Doublet
             peak1_idx = np.nanargmax(flux)
             peak1_wave = x[peak1_idx]
 
-            # 排除第一峰附近，再寻找第二峰
+            # Exclude pixels near the strongest peak before finding the other peak.
             flux_masked = flux.copy()
             suppress = np.abs(x - peak1_wave) < min_separation
             flux_masked[suppress] = -np.inf
@@ -235,19 +207,11 @@ def extract_asymmetric_lpf_A(
                 continue
 
             peak2_idx = np.argmax(flux_masked)
-            peak2_wave = x[peak2_idx]
-
-            # mu1 始终为短波侧峰，mu2 为长波侧峰
-            if peak1_wave <= peak2_wave:
-                mu1_0 = peak1_wave
-                mu2_0 = peak2_wave
-                amp1_0 = max(flux[peak1_idx], 1e-3)
-                amp2_0 = max(flux[peak2_idx], 1e-3)
-            else:
-                mu1_0 = peak2_wave
-                mu2_0 = peak1_wave
-                amp1_0 = max(flux[peak2_idx], 1e-3)
-                amp2_0 = max(flux[peak1_idx], 1e-3)
+            # Order the peaks by wavelength.
+            blue_peak, red_peak = sorted((peak1_idx, peak2_idx))
+            mu1_0, mu2_0 = x[[blue_peak, red_peak]]
+            amp1_0 = max(flux[blue_peak], 1e-3)
+            amp2_0 = max(flux[red_peak], 1e-3)
 
             dmu0 = np.clip(
                 mu2_0 - mu1_0,
@@ -255,7 +219,7 @@ def extract_asymmetric_lpf_A(
                 max_separation
             )
 
-            # 为第二峰至少预留最小间距
+            # Leave room for at least the minimum doublet separation.
             mu1_high = center_high - min_separation
 
             if center_low >= mu1_high:
@@ -264,39 +228,19 @@ def extract_asymmetric_lpf_A(
             mu1_0 = np.clip(mu1_0, center_low, mu1_high)
 
             p0 = [
-                amp1_0,
-                mu1_0,
-                sigma0,
-                sigma0,
-                amp2_0,
-                dmu0,
-                sigma0,
-                sigma0,
+                amp1_0, mu1_0, sigma0, sigma0,
+                amp2_0, dmu0, sigma0, sigma0,
             ]
-
             lower_bounds = [
-                0.0,
-                center_low,
-                min_sigma,
-                min_sigma,
-                0.0,
-                min_separation,
-                min_sigma,
-                min_sigma,
+                0.0, center_low, min_sigma, min_sigma,
+                0.0, min_separation, min_sigma, min_sigma,
             ]
-
             upper_bounds = [
-                np.inf,
-                mu1_high,
-                max_sigma,
-                max_sigma,
-                np.inf,
-                max_separation,
-                max_sigma,
-                max_sigma,
+                np.inf, mu1_high, max_sigma, max_sigma,
+                np.inf, max_separation, max_sigma, max_sigma,
             ]
 
-        # 确保初始值严格位于 bounds 内
+        # Keep the initial parameters strictly inside the bounds.
         p0 = np.clip(
             np.asarray(p0, dtype=float),
             np.asarray(lower_bounds) + 1e-10,
@@ -324,20 +268,11 @@ def extract_asymmetric_lpf_A(
             sigma_right[y] = [sig_r, 0.0]
 
         else:
-            (
-                amp1,
-                mu1,
-                sig1_l,
-                sig1_r,
-                amp2,
-                dmu,
-                sig2_l,
-                sig2_r,
-            ) = popt
+            amp1, mu1, sig1_l, sig1_r, amp2, dmu, sig2_l, sig2_r = popt
 
             mu2 = mu1 + dmu
 
-            # 排除第二峰落到波长范围之外的结果
+            # Discard fits whose second peak falls outside the fitting window.
             if mu2 > center_high:
                 continue
 
@@ -354,7 +289,42 @@ def extract_asymmetric_lpf_A(
     )
 
 
-def exam_line_profile_A(
+def _reconstruct_profiles(wave, amp, mu, sigma_left, sigma_right, valid_fit):
+    """Evaluate each valid peak on its own row's wavelength grid."""
+    restored = np.full(wave.shape, np.nan, dtype=float)
+    min_sigma = np.finfo(float).eps
+    for y, wavelengths in enumerate(wave):
+        valid_wave = np.isfinite(wavelengths)
+        peaks = np.flatnonzero(valid_fit[y])
+        if not valid_wave.any() or not peaks.size:
+            continue
+
+        model = np.zeros(wavelengths.shape, dtype=float)
+        for peak in peaks:
+            model[valid_wave] += two_half_gaussians(
+                wavelengths[valid_wave], amp[y, peak], mu[y, peak],
+                max(sigma_left[y, peak], min_sigma),
+                max(sigma_right[y, peak], min_sigma),
+            )
+        restored[y] = model
+    return restored
+
+
+def _profile_residuals(data, restored, spec_var):
+    """Use the global median background for the diagnostic residuals."""
+    background = np.nanmedian(data)
+    residual = (data - background) - restored
+    if spec_var is None:
+        return residual, residual, f"Data - bkg - restored\n(bkg: {background:.1f})"
+
+    valid_var = np.isfinite(spec_var) & (spec_var > 0)
+    spec_err = np.full(data.shape, np.nan)
+    spec_err[valid_var] = np.sqrt(spec_var[valid_var])
+    title = r"(Data - bkg - restored) / $\sqrt{\rm var}$"
+    return residual, residual / spec_err, f"{title}\n(bkg: {background:.1f})"
+
+
+def plot_lpf_diagnostics(
         LPFs,
         spec_data,
         spec_mask,
@@ -365,69 +335,47 @@ def exam_line_profile_A(
         filename="test_LPF_A.jpg",
         plot_with=None, label_of_plot_with=None, plot_with_color='red'
     ):
-    """
-    LPFs = (Amp, Mu, sigma_left, sigma_right)
+    """Reconstruct line profiles, save diagnostic plots, and return residuals.
 
-    Parameters
-    ----------
-    Amp : ndarray, shape (ny, 2)
-        两个峰的振幅；单峰时仅使用第 0 列。
-
-    Mu : ndarray or Quantity, shape (ny, 2)
-        线心，单位为 Angstrom。
-
-    sigma_left, sigma_right : ndarray or Quantity, shape (ny, 2)
-        两个峰的左右翼 sigma，单位为 Angstrom。
-
-    wavelength : ndarray or Quantity, shape (ny, nx)
-        每行每个像素对应的波长，单位为 Angstrom。
-
-    line : str
-        若位于 doublets 中，则按双峰重建，否则按单峰重建。
-
-    spec_var : ndarray, optional
-        光谱方差。提供时绘制 residual / sqrt(var)。
+    LPFs is the tuple (amp, mu, sigma_left, sigma_right), with each array
+    shaped (ny, 2). Plain wavelength, center, and width arrays are in angstroms.
+    The wavelength grid and spec_mask must match spec_data. True mask entries
+    mark valid data. If spec_var is given, the residual panel shows the
+    residual divided by the square root of the variance.
 
     Returns
     -------
     restored : ndarray, shape (ny, nx)
-        重建的发射线，不包含背景。
-
+        Reconstructed emission lines without a background.
     residual : ndarray, shape (ny, nx)
-        (data - background) - restored，未除以误差。
+        Data minus the global median background and reconstructed lines.
+        The returned residual is in flux units.
     """
-    import numpy as np
-    import astropy.units as u
     import matplotlib.pyplot as plt
-
-    def as_angstrom_value(value):
-        """Quantity 转换为 Å 数值；普通数组默认已经是 Å。"""
-        if isinstance(value, u.Quantity):
-            return value.to_value(u.Angstrom)
-        return np.asarray(value, dtype=float)
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
 
     Amp, Mu, sigma_l, sigma_r = LPFs
 
     Amp = np.asarray(Amp, dtype=float)
-    Mu = as_angstrom_value(Mu)
-    sigma_l = as_angstrom_value(sigma_l)
-    sigma_r = as_angstrom_value(sigma_r)
-    wave = as_angstrom_value(wavelength)
+    Mu = _as_angstrom_values(Mu)
+    sigma_l = _as_angstrom_values(sigma_l)
+    sigma_r = _as_angstrom_values(sigma_r)
+    wave = _as_angstrom_values(wavelength)
 
     spec_data = np.asarray(spec_data, dtype=float)
     spec_mask = np.asarray(spec_mask, dtype=bool)
 
     if spec_data.ndim != 2:
-        raise ValueError("spec_data 必须是二维数组")
+        raise ValueError("spec_data must be a two-dimensional array")
 
     ny, nx = spec_data.shape
 
     if spec_mask.shape != (ny, nx):
-        raise ValueError("spec_mask 必须与 spec_data 形状相同")
+        raise ValueError("spec_mask must have the same shape as spec_data")
 
     if wave.shape != (ny, nx):
         raise ValueError(
-            "wavelength 必须是 shape (ny, nx) 的二维数组"
+            "wavelength must have the same shape (ny, nx) as spec_data"
         )
 
     for name, parameter in (
@@ -438,8 +386,8 @@ def exam_line_profile_A(
     ):
         if parameter.shape != (ny, 2):
             raise ValueError(
-                f"{name} 必须是 shape ({ny}, 2)，"
-                f"当前为 {parameter.shape}"
+                f"{name} must have shape ({ny}, 2), "
+                f"got {parameter.shape}"
             )
 
     if spec_var is not None:
@@ -447,154 +395,42 @@ def exam_line_profile_A(
 
         if spec_var.shape != (ny, nx):
             raise ValueError(
-                "spec_var 必须与 spec_data 形状相同"
+                "spec_var must have the same shape as spec_data"
             )
 
     use_doublet = line in doublets
     n_lines = 2 if use_doublet else 1
+    valid_fit = (
+        np.isfinite(Amp) & np.isfinite(Mu)
+        & np.isfinite(sigma_l) & np.isfinite(sigma_r)
+        & (Amp >= 0) & (sigma_l > 0) & (sigma_r > 0)
+    )[:, :n_lines]
 
     arr = np.where(spec_mask, spec_data, np.nan)
-
-    # ---------------------------------------------------------
-    # 非对称单峰
-    # ---------------------------------------------------------
-    def half_gaussian(x, amp, mu, sig_l, sig_r):
-        sigma = np.where(x < mu, sig_l, sig_r)
-        sigma = np.maximum(sigma, np.finfo(float).eps)
-
-        return amp * np.exp(
-            -0.5 * ((x - mu) / sigma) ** 2
-        )
-
-    # ---------------------------------------------------------
-    # 使用每行自己的波长坐标重建
-    # ---------------------------------------------------------
-    restored = np.full((ny, nx), np.nan, dtype=float)
-    
-    for y in range(ny):
-        x = wave[y]
-        valid_wave = np.isfinite(x)
-
-        if not np.any(valid_wave):
-            continue
-
-        model = np.zeros(nx, dtype=float)
-        has_valid_fit = False
-
-        for num in range(n_lines):
-            parameters = np.array([
-                Amp[y, num],
-                Mu[y, num],
-                sigma_l[y, num],
-                sigma_r[y, num],
-            ])
-
-            if not np.all(np.isfinite(parameters)):
-                continue
-
-            amp, mu, sig_l, sig_r = parameters
-
-            if amp < 0 or sig_l <= 0 or sig_r <= 0:
-                continue
-
-            model[valid_wave] += half_gaussian(
-                x[valid_wave],
-                amp,
-                mu,
-                sig_l,
-                sig_r,
-            )
-            has_valid_fit = True
-
-        if has_valid_fit:
-            restored[y] = model
-
+    restored = _reconstruct_profiles(wave, Amp, Mu, sigma_l, sigma_r, valid_fit)
     restored = np.where(spec_mask, restored, np.nan)
-
-    # ---------------------------------------------------------
-    # 背景、残差及方差归一化
-    # ---------------------------------------------------------
-    bkg = np.nanmedian(arr)
-    residual = (arr - bkg) - restored
-
     if spec_var is not None:
-        valid_var = (
-            spec_mask
-            & np.isfinite(spec_var)
-            & (spec_var > 0)
-        )
-
-        spec_err = np.full((ny, nx), np.nan)
-        spec_err[valid_var] = np.sqrt(spec_var[valid_var])
-
-        residual_for_plot = residual / spec_err
-        residual_title = (
-            r"(Data - bkg - restored) / $\sqrt{\rm var}$"
-            + "\n"
-            + f"(bkg: {bkg:.1f})"
-        )
-    else:
-        residual_for_plot = residual
-        residual_title = (
-            "Data - bkg - restored"
-            + "\n"
-            + f"(bkg: {bkg:.1f})"
-        )
-
-    # ---------------------------------------------------------
-    # 绘制图像
-    # ---------------------------------------------------------
-    fig, axes = plt.subplots(
-        2, # rows
-        2,
-        figsize=(9, 6),
-        sharex=True, 
-        sharey=True,
+        spec_var = np.where(spec_mask, spec_var, np.nan)
+    residual, residual_for_plot, residual_title = _profile_residuals(
+        arr, restored, spec_var
     )
 
+    fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True, sharey=True)
     panels = [
+        (axes[0, 0], arr, "Data", "viridis"),
         (
-            axes[0, 0],
-            arr,
-            "Data",
+            axes[0, 1], restored,
+            "Asymmetric LPF restored\n(from data, not from velocity model)",
             "viridis",
         ),
-        (
-            axes[0, 1],
-            restored,
-            "Asymmetric LPF restored"+"\n"+"(from data, not from velocity model)",
-            "viridis",
-        ),
-        (
-            axes[1, 1],
-            residual_for_plot,
-            residual_title,
-            "coolwarm",
-        ),
-        # (
-        #     axes[1, 2],
-        #     plot_with,
-        #     "Model"+"\n"+"(line centers by velocity field)",
-        #     "coolwarm",
-        # ),
+        (axes[1, 1], residual_for_plot, residual_title, "coolwarm"),
     ]
     ax_lpf = axes[1, 0]
-    
-    # 在 ax_lpf 左侧添加一个共用 y 轴的 sigma 面板
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
     divider = make_axes_locatable(ax_lpf)
-    ax_sigma = divider.append_axes(
-        "left",
-        size="60%",       # sigma 面板宽度
-        pad=0.02,
-        sharey=ax_lpf,
-        )
+    ax_sigma = divider.append_axes("left", size="60%", pad=0.02, sharey=ax_lpf)
 
-    # 每个光谱像素对应的空间坐标
-    y_grid = np.broadcast_to(
-        np.arange(ny, dtype=float)[:, None],
-        wave.shape
-    )
+    all_rows = np.arange(ny)
+    y_grid = np.broadcast_to(all_rows[:, None].astype(float), wave.shape)
 
     for ax_image, image, title, cmap in panels:
         plot_kwargs = {
@@ -603,7 +439,7 @@ def exam_line_profile_A(
             "rasterized": True,
         }
 
-        # 残差图使用以 0 为中心的对称色标
+        # Center the residual color scale on zero.
         if cmap == "coolwarm":
             finite = image[np.isfinite(image)]
 
@@ -612,11 +448,10 @@ def exam_line_profile_A(
 
                 if np.isfinite(vmax) and vmax > 0:
                     plot_kwargs.update(vmin=-vmax, vmax=vmax)
-        
-        # 高级extent - 第k列不要简单画在横坐标k，横坐标也与y有关！
-        #              第(y, k)像素画在横坐标wave[y, k]上。
+
+        # Plot each pixel at its wavelength, which can vary by spatial row.
         im = ax_image.pcolormesh(
-            wave,                        # shape (ny, nx)，单位 Å
+            wave,                        # shape (ny, nx), in angstroms
             y_grid,                      # shape (ny, nx)
             np.ma.masked_invalid(image),
             **plot_kwargs
@@ -628,68 +463,32 @@ def exam_line_profile_A(
         ax_image.grid(linestyle=':', color='gray', alpha=1)
         fig.colorbar(im, ax=ax_image)
 
-    # ---------------------------------------------------------
-    # 绘制 LPF 中心和非对称宽度
-    # ---------------------------------------------------------
+    # Scale opacity by the largest amplitude across the active peaks.
     amp_used = Amp[:, :n_lines]
-    finite_amps = amp_used[
-        np.isfinite(amp_used) & (amp_used >= 0)
-    ]
-
-    if finite_amps.size > 0:
-        max_alpha = np.nanmax(finite_amps)
-    else:
-        max_alpha = np.nan
-
+    finite_amps = amp_used[np.isfinite(amp_used) & (amp_used >= 0)]
+    max_alpha = finite_amps.max() if finite_amps.size else np.nan
     markers = ("|", ".")
     colors = ("blue", "tab:orange")
 
     for num in range(n_lines):
-        valid = (
-            np.isfinite(Amp[:, num])
-            & np.isfinite(Mu[:, num])
-            & np.isfinite(sigma_l[:, num])
-            & np.isfinite(sigma_r[:, num])
-            & (Amp[:, num] >= 0)
-            & (sigma_l[:, num] > 0)
-            & (sigma_r[:, num] > 0)
-        )
-
-        ys = np.arange(ny)[valid]
+        valid = valid_fit[:, num]
+        ys = all_rows[valid]
         centers = Mu[valid, num]
         amps = Amp[valid, num]
         xerr_left = sigma_l[valid, num]
         xerr_right = sigma_r[valid, num]
 
-        # -----------------------------------------------------
-        # 在左侧面板画每一行的左右 sigma
-        # 使用完整数组并将无效位置设为 NaN，避免跨无效行连线
-        # -----------------------------------------------------
-        sigma_left_plot = np.full(ny, np.nan)
-        sigma_right_plot = np.full(ny, np.nan)
-
-        sigma_left_plot[valid] = sigma_l[valid, num]
-        sigma_right_plot[valid] = sigma_r[valid, num]
-
-        all_rows = np.arange(ny)
-
-        ax_sigma.plot(
-            sigma_left_plot,
-            all_rows,
-            color=colors[num],
-            linestyle="--",
-            linewidth=1.2,
-            label=rf"L#{num + 1}: left $\sigma$",
-        )
-
-        ax_sigma.plot(
-            sigma_right_plot,
-            all_rows,
-            color=colors[num],
-            linestyle="-",
-            linewidth=1.2,
-            label=rf"L#{num + 1}: right $\sigma$",
-        )
+        # NaNs break the width curves at rows with invalid fits.
+        sigma_left_plot = np.where(valid, sigma_l[:, num], np.nan)
+        sigma_right_plot = np.where(valid, sigma_r[:, num], np.nan)
+        for side, widths, linestyle in (
+            ("left", sigma_left_plot, "--"),
+            ("right", sigma_right_plot, "-"),
+        ):
+            ax_sigma.plot(
+                widths, all_rows, color=colors[num], linestyle=linestyle,
+                linewidth=1.2, label=rf"L#{num + 1}: {side} $\sigma$",
+            )
 
         if centers.size == 0:
             continue
@@ -703,18 +502,11 @@ def exam_line_profile_A(
         else:
             alphas = np.ones_like(amps)
 
-        # 将标签放在当前峰振幅最大的点上
+        # Use the highest-amplitude point for the legend entry.
         label_index = int(np.nanargmax(amps))
 
-        for i, (center, y, xl, xr, alpha) in enumerate(
-            zip(
-                centers,
-                ys,
-                xerr_left,
-                xerr_right,
-                alphas,
-            )
-            ):
+        points = zip(centers, ys, xerr_left, xerr_right, alphas)
+        for i, (center, y, xl, xr, alpha) in enumerate(points):
             ax_lpf.errorbar(
                 center,
                 y,
@@ -723,51 +515,37 @@ def exam_line_profile_A(
                 fmt=markers[num],
                 capsize=5,
                 color=colors[num],
-                label=(
-                    f"Line {num + 1}"
-                    if i == label_index
-                    else None
-                    ),
-                )
-            
+                label=f"Line {num + 1}" if i == label_index else None,
+            )
+
+    # The overlay is a single profile, shown on the last active peak's rows.
     if plot_with is not None:
+        overlay_rows = valid_fit[:, -1]
+        overlay_centers, overlay_left, overlay_right = (
+            values[overlay_rows].to_value(u.Angstrom) for values in plot_with[1:4]
+        )
         ax_lpf.errorbar(
-            plot_with[1][valid].to(u.Angstrom).value, 
-            ys, 
-            xerr=np.array([plot_with[2][valid].to(u.Angstrom).value, 
-                           plot_with[3][valid].to(u.Angstrom).value]),
+            overlay_centers,
+            all_rows[overlay_rows],
+            xerr=np.array([overlay_left, overlay_right]),
             fmt='x',
-            color=plot_with_color, 
+            color=plot_with_color,
             alpha=0.5,
             capsize=5,
             label=label_of_plot_with,
-            zorder=-1
+            zorder=-1,
+        )
+
+        for side, values, color, linestyle in (
+            ("left", overlay_left, plot_with_color, "--"),
+            ("right", overlay_right, "magenta", "-"),
+        ):
+            widths = np.full(ny, np.nan)
+            widths[overlay_rows] = values
+            ax_sigma.plot(
+                widths, all_rows, color=color, alpha=0.5, linestyle=linestyle,
+                linewidth=1.5, label=rf"L#{n_lines}: {side} $\sigma$",
             )
-        
-        sigma_left_plot[valid]  = plot_with[2][valid].to(u.Angstrom).value
-        sigma_right_plot[valid] = plot_with[3][valid].to(u.Angstrom).value
-
-        all_rows = np.arange(ny)
-
-        ax_sigma.plot(
-            sigma_left_plot,
-            all_rows,
-            color=plot_with_color,
-            alpha=0.5,
-            linestyle="--",
-            linewidth=1.5,
-            label=rf"L#{num + 1}: left $\sigma$",
-        )
-
-        ax_sigma.plot(
-            sigma_right_plot,
-            all_rows,
-            color='magenta',
-            alpha=0.5,
-            linestyle="-",
-            linewidth=1.5,
-            label=rf"L#{num + 1}: right $\sigma$",
-        )
 
     ax_lpf.set_title(
         f"{line}: asymmetric "
@@ -779,7 +557,7 @@ def exam_line_profile_A(
     ax_lpf.set_ylim(-0.5, ny - 0.5)
     ax_lpf.grid(linestyle=':', color='gray', alpha=1)
 
-    # y 轴标签只放在最左边的 sigma 面板上
+    # Show shared y tick labels on the leftmost panel.
     ax_lpf.tick_params(axis="y", labelleft=False)
 
     ax_sigma.set_xlabel(r"$\sigma$ [$\mathrm{\AA}$]")
@@ -787,7 +565,7 @@ def exam_line_profile_A(
     ax_sigma.grid(linestyle=":", color="gray", alpha=1)
     ax_sigma.legend(fontsize=8)
 
-    handles, labels = ax_lpf.get_legend_handles_labels()
+    handles, _ = ax_lpf.get_legend_handles_labels()
     if handles:
         ax_lpf.legend(fontsize=10)
 
@@ -813,354 +591,15 @@ def exam_line_profile_A(
     return restored, residual
 
 
-def extract_asymmetric_LPF(data, lambda_scale, line='Hb', 
-                           min_separation=3.0, # in Angstrom
-                           max_separation=15.0, # in Angstrom
-                           min_sigma=1, # in pixels
-                           max_sigma=10.0 # in pixels
-                           ):
-    """
-    对每个空间位置取相邻三行的平均谱，并拟合非对称双峰。
+def add_colorbar_by_alpha(plt, fig, ax, color, label="label", bar_low=0, bar_high=1):
+    """Add a colorbar with opacity proportional to the value."""
+    from matplotlib.colors import LinearSegmentedColormap, Normalize, to_rgb
 
-    Parameters
-    ----------
-    data : ndarray, shape (ny, nx)
-        二维光谱数据，允许包含 NaN。
-
-    lambda_scale : float
-        像素到波长的转换系数。
-
-    Returns
-    -------
-    Amp : ndarray, shape (ny, 2)
-        两个峰的振幅。
-
-    Mu : ndarray, shape (ny, 2)
-        两个峰的中心，单位为像素。
-
-    sigma1 : ndarray, shape (ny, 2)
-        两个峰的左翼 sigma，单位为波长。
-
-    sigma2 : ndarray, shape (ny, 2)
-        两个峰的右翼 sigma，单位为波长。
-    """
-    doublets = ['O2']
-    function_this_line = asymmetric_doublet if line in doublets else two_half_gaussians
-
-    data = np.asarray(data, dtype=float)
-
-    if data.ndim != 2:
-        raise ValueError("data 必须是二维数组")
-
-    ny, nx = data.shape
-    x_all = np.arange(nx, dtype=float)
-
-    Amp = np.full((ny, 2), np.nan)
-    Mu = np.full((ny, 2), np.nan)
-    sigma1 = np.full((ny, 2), np.nan)
-    sigma2 = np.full((ny, 2), np.nan)
-
-    for y in range(ny):
-
-        # 相邻三行；边界处重复边界行
-        if y == 0:
-            rows = data[[0, 0, 1]]
-        elif y == ny - 1:
-            rows = data[[ny - 2, ny - 1, ny - 1]]
-        else:
-            rows = data[y - 1:y + 2]
-
-        with np.errstate(invalid="ignore"):
-            profile = np.nanmean(rows, axis=0)
-
-        valid = np.isfinite(profile)
-        x = x_all[valid]
-        flux = profile[valid]
-
-        if x.size < 10:
-            continue
-
-        # 估计并减去背景
-        background = np.nanmedian(flux)
-        flux = flux - background
-
-        if not np.any(np.isfinite(flux)) or np.nanmax(flux) <= 0:
-            continue
-
-        # 最高峰
-        peak1_idx = np.nanargmax(flux)
-        peak1_x = x[peak1_idx]
-
-        # 屏蔽最高峰附近，再寻找第二峰
-        flux_masked = flux.copy()
-        suppress = np.abs(x - peak1_x) < (min_separation/lambda_scale)
-        flux_masked[suppress] = -np.inf
-
-        if not np.any(np.isfinite(flux_masked)):
-            continue
-
-        peak2_idx = np.argmax(flux_masked)
-        peak2_x = x[peak2_idx]
-
-        # 按波长位置区分左右峰
-        if peak1_x <= peak2_x:
-            mu1_0 = peak1_x
-            mu2_0 = peak2_x
-            amp1_0 = max(flux[peak1_idx], 1e-3)
-            amp2_0 = max(flux[peak2_idx], 1e-3)
-        else:
-            mu1_0 = peak2_x
-            mu2_0 = peak1_x
-            amp1_0 = max(flux[peak2_idx], 1e-3)
-            amp2_0 = max(flux[peak1_idx], 1e-3)
-
-        dmu_0 = np.clip(
-            mu2_0 - mu1_0,
-            (min_separation/lambda_scale),
-            (max_separation/lambda_scale)
-        )
-
-        p0 = [
-            amp1_0,
-            mu1_0,
-            2.0,
-            2.0,
-            amp2_0,
-            dmu_0,
-            2.0,
-            2.0
-        ]
-
-        lower_bounds = [
-            0.0,
-            1.0,
-            min_sigma,
-            min_sigma,
-            0.0,
-            (min_separation/lambda_scale),
-            min_sigma,
-            min_sigma
-        ]
-
-        upper_bounds = [
-            np.inf,
-            nx - 2.0,
-            max_sigma,
-            max_sigma,
-            np.inf,
-            (max_separation/lambda_scale),
-            max_sigma,
-            max_sigma
-        ]
-
-        # 防止初值落在边界之外
-        p0 = np.clip(
-            p0,
-            np.asarray(lower_bounds) + 1e-8,
-            np.asarray(upper_bounds) - 1e-8
-        )
-
-        try:
-            popt, _ = curve_fit(
-                function_this_line,
-                x,
-                flux,
-                p0=p0,
-                bounds=(lower_bounds, upper_bounds),
-                maxfev=20000
-            )
-        except (RuntimeError, ValueError, FloatingPointError):
-            continue
-
-        # popt 的正确参数顺序
-        (
-            amp1,
-            mu1,
-            sigma1_left,
-            sigma1_right,
-            amp2,
-            dmu,
-            sigma2_left,
-            sigma2_right
-        ) = popt
-
-        mu2 = mu1 + dmu
-
-        # 避免第二峰中心超出图像
-        if mu2 >= nx:
-            continue
-
-        Amp[y] = [amp1, amp2]
-        Mu[y] = [mu1, mu2]
-
-        # sigma 从像素转换为波长单位
-        sigma1[y] = np.array(
-            [sigma1_left, sigma2_left]
-        ) * lambda_scale
-
-        sigma2[y] = np.array(
-            [sigma1_right, sigma2_right]
-        ) * lambda_scale
-
-    return Amp, Mu, sigma1, sigma2
-
-
-def exam_line_profile(LPFs, spec_data, spec_mask, lambda_scale,
-                      spec_var=None, filename="test_LPF.jpg"):
-    """
-    LPFs = (Amp, Mu, sigma_left, sigma_right)
-
-    Amp、Mu、sigma_left、sigma_right: shape (ny, 2)
-    Mu 为像素单位；sigma 为波长单位。
-    """
-    Amp, Mu, sigma_l, sigma_r = [
-        np.asarray(v, dtype=float) for v in LPFs
-    ]
-
-    arr = np.where(spec_mask, spec_data, np.nan)
-    ny, nx = arr.shape
-
-    if Amp.shape != (ny, 2):
-        raise ValueError("LPF参数的形状必须为 (ny, 2)")
-
-    # sigma：波长单位转换回像素，用于重建谱线 [1]
-    sigma_l_pix = sigma_l / lambda_scale
-    sigma_r_pix = sigma_r / lambda_scale
-
-    def half_gaussian(x, amp, mu, sig_l, sig_r):
-        sigma = np.where(x < mu, sig_l, sig_r)
-        sigma = np.maximum(sigma, 1e-8)
-        return amp * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
-
-    x = np.arange(nx, dtype=float)
-    restored = np.full((ny, nx), np.nan)
-
-    for y in range(ny):
-        if not np.all(np.isfinite(
-            [*Amp[y], *Mu[y], *sigma_l_pix[y], *sigma_r_pix[y]]
-        )):
-            continue
-
-        restored[y] = (
-            half_gaussian(
-                x, Amp[y, 0], Mu[y, 0],
-                sigma_l_pix[y, 0], sigma_r_pix[y, 0]
-            )
-            + half_gaussian(
-                x, Amp[y, 1], Mu[y, 1],
-                sigma_l_pix[y, 1], sigma_r_pix[y, 1]
-            )
-        )
-
-    restored = np.where(spec_mask, restored, np.nan)
-    spec_err = np.where(spec_mask, spec_var**0.5, np.nan)
-    bkg      = np.nanmedian(arr)
-    residual = (arr - bkg) - restored
-
-    fig, axes = plt.subplots(2, 2, figsize=(7, 7), 
-                            #  sharex=True, 
-                             sharey=True)
-
-    panels = [
-        (arr, "Data", "viridis"),
-        (restored, "Asymmetric LPF restored", "viridis"),
-        (residual/spec_err, r"(Data - bkg - restored) / $\sqrt{\rm var}$"+"\n"+f"(bkg: {bkg:.1f})", "coolwarm"),
-    ]
-
-    for ax, (image, title, cmap) in zip(axes.flat, panels):
-        im = ax.imshow(
-            image, origin="lower", aspect="auto", cmap=cmap
-        )
-        ax.set_title(title)
-        ax.set_xlabel("Spectral pixel")
-        ax.set_ylabel("Spatial row")
-        fig.colorbar(im, ax=ax)
-
-    # Plot of LPFs
-    valid = (
-        np.isfinite(Amp[:, 0])
-        & np.isfinite(Mu[:, 0])
-        & np.isfinite(sigma_l_pix[:, 0])
-        & np.isfinite(sigma_r_pix[:, 0])
-    )
-
-    ys = np.arange(ny)[valid]
-    mu = Mu[valid]
-    amps = Amp[valid]
-    xerr_left = sigma_l_pix[valid]
-    xerr_right = sigma_r_pix[valid]
-
-    max_alpha   = np.nanmax(Amp)
-    
-    if np.isfinite(max_alpha) and max_alpha > 0:
-        alphas = np.clip(amps / max_alpha, 0.0, 1.0)
-    else:
-        alphas = np.ones_like(amps)
-    where_max_a = [np.nanargmax(alphas[:,num]) 
-                   for num in range(alphas.shape[1])]
-
-    ax = axes[-1, -1]
-
-    # For each non-NaN row
-    for i, (x, y, xl, xr, alpha) in enumerate(
-        zip(mu, ys, xerr_left, xerr_right, alphas)
-        ):
-        
-        # For each line
-        for num in range(len(amps[0])):
-            ax.errorbar(
-                x[num],
-                y,
-                xerr=[[xl[num]], [xr[num]]],  # 非对称左右误差
-                alpha=float(alpha[num]),      # 必须是标量
-                fmt="|" if num==0 else '.',
-                capsize=5,
-                color="blue",
-                label=f"Line {num+1}" if i==where_max_a[num] 
-                                      else None # Only add once
-                )
-
-    add_colorbar_by_alpha(
-        plt,
-        fig,
-        ax,
-        "blue",
-        label="amp",
-        bar_low=0,
-        bar_high=max_alpha
-    )
-
-    plt.legend()
-    fig.tight_layout()
-    fig.savefig(filename, dpi=300, bbox_inches="tight")
-    plt.close(fig)
-
-    return restored, residual
-
-
-def add_colorbar_by_alpha(plt, fig, ax, color, label='label', bar_low=0, bar_high=1):
-    # 创建一个只改变 alpha 的自定义 cmap，转换成 RGB，然后定义渐变
-    import matplotlib.colors as mcolors
-    rgb = mcolors.to_rgb(color)
-    cdict = {
-        'red':   [(0.0, rgb[0], rgb[0]), (1.0, rgb[0], rgb[0])],
-        'green': [(0.0, rgb[1], rgb[1]), (1.0, rgb[1], rgb[1])],
-        'blue':  [(0.0, rgb[2], rgb[2]), (1.0, rgb[2], rgb[2])],
-        'alpha': [(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)] # 这里控制透明度渐变
-    }
-    alpha_cmap = mcolors.LinearSegmentedColormap('AlphaMap', cdict)
-
-    # 添加色条，创建归一化映射
-    norm = mcolors.Normalize(vmin=bar_low, vmax=bar_high)
-    
-    # 创建 ScalarMappable 并传给 colorbar
-    sm = plt.cm.ScalarMappable(cmap=alpha_cmap, norm=norm)
-    sm.set_array([]) # 必须设置一个空数组
-
-    # 在指定的子图 ax 旁边添加色条
-    cbar = fig.colorbar(sm, ax=ax, label=label)
-    
-    return cbar
+    rgb = to_rgb(color)
+    cmap = LinearSegmentedColormap.from_list("AlphaMap", [(*rgb, 0), (*rgb, 1)])
+    norm = Normalize(vmin=bar_low, vmax=bar_high)
+    mappable = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    return fig.colorbar(mappable, ax=ax, label=label)
 
 
 if __name__ == "__main__":
@@ -1174,13 +613,13 @@ if __name__ == "__main__":
         data_info = joblib.load(file)
 
     # Line profile extracted from the noisy spectrum.
-    amp, mean, sigma_left, sigma_right = extract_asymmetric_lpf_A(
+    amp, mean, sigma_left, sigma_right = fit_asymmetric_line_profiles(
         data_info["spec"][spec_idx]["data"],
         data_info["spec"][spec_idx]["meta"]["lambda_grid"],
         line="Ha",
     )
 
-    exam_line_profile_A(
+    plot_lpf_diagnostics(
         (amp, mean, sigma_left, sigma_right),
         data_info["spec"][spec_idx]["data"],
         data_info["spec"][spec_idx]["mask"],

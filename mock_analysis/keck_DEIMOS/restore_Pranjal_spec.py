@@ -118,8 +118,8 @@ Mu  = np.array([ mu1,  mu2]).T
 sigma1 = np.array([sigma_1l, sigma_2l]).T
 sigma2 = np.array([sigma_1r, sigma_2r]).T
 
-from klm.line_profile_extraction import exam_line_profile_A
-restored, residual = exam_line_profile_A(
+from klm.line_profile_extraction import plot_lpf_diagnostics
+restored, residual = plot_lpf_diagnostics(
     (Amp, Mu, sigma1, sigma2),
     spec_data,
     spec_mask,
