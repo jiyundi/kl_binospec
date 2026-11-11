@@ -39,7 +39,7 @@ _all_emilines_supported = {
     'O3b': [5008.240], 
     'N2a': [6549.86 ], 
     'N2b': [6585.27 ],
-    }
+}
 
 
 if __name__ == '__main__':

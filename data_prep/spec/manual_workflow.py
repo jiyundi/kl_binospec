@@ -4,6 +4,7 @@ Only NumPy, Astropy, SciPy, Matplotlib and ipywidgets/ipympl are needed.
 """
 
 from types import SimpleNamespace
+from pathlib import Path
 
 import numpy as np
 
@@ -11,6 +12,62 @@ from .crop_plan import (SETS, make_plan, prepare_rough, redshift_from_crop,
                         save_plan)
 from .line_center_crop import EmissionProcessor
 from .read_and_cutout import read_spec2d, stack_spec2d
+
+
+LINE_WAVES = {
+    'O2': [3727.092, 3729.875],
+    'Ha': [6564.608], 'Hb': [4862.683], 'Hg': [4341.684],
+    'O3a': [4960.295], 'O3b': [5008.240],
+    'N2a': [6549.86], 'N2b': [6585.27],
+}
+
+
+def load_slit_lines(slit_num, table_path):
+    """Read redshift and allowed lines; return (None, {}) when unavailable.
+
+    Keep main.py's row convention: skip the header, then index by slit_num.
+    Requires pandas and openpyxl for the Excel table.
+    """
+    import pandas as pd
+
+    table = pd.read_excel(table_path, header=None, engine='openpyxl').to_numpy()[1:]
+    redshift = table[slit_num, 1]
+    if pd.isna(redshift):
+        print(f'Stop: no secure redshift found for Slit {slit_num}.')
+        return None, {}
+    names = set()
+    for column in (6, 9, 12):
+        value = table[slit_num, column]
+        if pd.notna(value):
+            names.update(name.strip() for name in value.split(',') if name.strip())
+    excluded = table[slit_num, 14]
+    if pd.notna(excluded):
+        names.difference_update(name.strip() for name in excluded.split(','))
+    if not names:
+        print(f'Stop: no lines provided for cutting for Slit {slit_num}.')
+        return None, {}
+    lines = {name: list(LINE_WAVES[name]) for name in names}
+    return float(redshift), dict(sorted(lines.items(), key=lambda item: item[1][0]))
+
+
+def review_slit(slit_num, paths, table_path, width=40, height=40, plan_path=None):
+    """Show all line reviews, or print Stop and return an empty dictionary.
+
+    Each review's save buttons merge its result into the shared plan file.
+    """
+    redshift, lines = load_slit_lines(slit_num, table_path)
+    if not lines:
+        return {}
+    if plan_path is None:
+        plan_path = Path(f'slit_{slit_num:03d}_crops.json')
+    sources = load_sources(paths)
+    reviews = {}
+    for name, waves in lines.items():
+        review = NotebookCropReview(sources, name, waves, redshift,
+                                    width, height, plan_path)
+        reviews[name] = review
+        review.show()
+    return reviews
 
 
 def load_sources(paths):
@@ -73,7 +130,12 @@ class NotebookCropReview:
         from matplotlib.patches import Rectangle
         from IPython.display import display
 
-        fig, axes = plt.subplots(3, 1, figsize=(9, 8), layout='constrained')
+        # Explicitly display the widget canvases once; ipympl otherwise also
+        # displays figures created in interactive mode at the end of the cell.
+        with plt.ioff():
+            fig, axes = plt.subplots(1, 3, figsize=(6, 2), layout='constrained')
+            preview, preview_axes = plt.subplots(
+                1, 3, figsize=(6, 2), layout='constrained')
         positions = []
         rectangles = []
         for i, (ax, cut) in enumerate(zip(axes, self.cuts)):
@@ -98,7 +160,7 @@ class NotebookCropReview:
             ax.add_patch(box)
             rectangles.append(box)
             ax.set_title(f'{self.name}: Set {SETS[i]}')
-            ax.set_xlabel('rough-cut wavelength pixel x')
+            ax.set_xlabel('wavelength pixel x')
             ax.set_ylabel('flipped spatial pixel y')
 
             def update(change, index=i):
@@ -118,6 +180,31 @@ class NotebookCropReview:
         fig.canvas.mpl_connect('button_press_event', click)
 
         output = widgets.Output()
+
+        def show_crop(cropped, how_cut):
+            for i, (ax, cut) in enumerate(zip(preview_axes, cropped)):
+                ax.clear()
+                flux = np.where(cut['mask'], cut['flux'], np.nan)
+                sigma = np.nanstd(flux)
+                ax.imshow(flux, origin='lower', aspect='equal',
+                          vmin=-sigma, vmax=5 * sigma)
+                info = how_cut[f'Set{i}']
+                for j in range(len(self.line_waves)):
+                    center = info[f'line{j+1}']
+                    ax.plot(center['x0'], center['y0'], '+', color='red')
+                ax.set_xlim(-0.5, flux.shape[1] - 0.5)
+                ax.set_ylim(-0.5, flux.shape[0] - 0.5)
+                ax.set_title(f'Set {SETS[i]}: {flux.shape[1]} × {flux.shape[0]} crop')
+                ax.set_xlabel('crop pixel x')
+                ax.set_ylabel('crop pixel y')
+            preview.canvas.draw_idle()
+
+        if self.auto_result is not None:
+            show_crop(*self.auto_result)
+        else:
+            for ax in preview_axes:
+                ax.set_axis_off()
+                ax.set_title('Awaiting successful fit')
         accept_auto = widgets.Button(description='Accept automatic fit',
                                      disabled=self.auto_result is None)
         refit = widgets.Button(description='Refit from selected centers')
@@ -127,6 +214,7 @@ class NotebookCropReview:
                 output.clear_output()
                 try:
                     self._save(*self.auto_result)
+                    show_crop(*self.auto_result)
                     print(f'Saved {self.name} to {self.plan_path}')
                 except (ValueError, OSError) as exc:
                     print(f'Could not save: {exc}')
@@ -142,14 +230,20 @@ class NotebookCropReview:
                         idx_xs=[xy[0] for xy in clicks],
                         idx_ys=[xy[1] for xy in clicks])
                     self._save(cropped, how_cut, clicks=clicks)
+                    for ax in preview_axes:
+                        ax.set_axis_on()
+                    show_crop(cropped, how_cut)
                     print(f'Saved fitted crop for {self.name} to {self.plan_path}')
                 except (IndexError, RuntimeError, ValueError, OSError) as exc:
                     print(f'Fit/save failed: {exc}')
         refit.on_click(fit_and_save)
 
+        display(widgets.HTML('<b>Select centers (rough spectrum)</b>'))
         display(fig.canvas)
         display(widgets.VBox([widgets.HBox(pair) for pair in positions]))
         display(widgets.HBox([accept_auto, refit]), output)
+        display(widgets.HTML('<b>Fitted crop preview (red +: fitted centers)</b>'))
+        display(preview.canvas)
         if self.auto_result is None:
             with output:
                 print('Automatic fit unavailable:', self.auto_error)
