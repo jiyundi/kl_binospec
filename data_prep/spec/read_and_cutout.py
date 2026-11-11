@@ -3,13 +3,9 @@ from   astropy.io  import fits
 
 
 def read_spec2d(spec2dfilepath):
-    hdul = fits.open(spec2dfilepath)
-    
-    fdata = hdul[1].data['FLUX']
-    wdata = hdul[1].data['LAMBDA']
-    
-    farr = fdata[0,:,:]
-    warr = wdata[0,:,:]
+    with fits.open(spec2dfilepath) as hdul:
+        farr = hdul[1].data['FLUX'][0, :, :].copy()
+        warr = hdul[1].data['LAMBDA'][0, :, :].copy()
     
     farr = np.nan_to_num(farr, nan=-200) # replace nan with negatives
     warr = np.nan_to_num(warr, nan=0)
@@ -18,11 +14,11 @@ def read_spec2d(spec2dfilepath):
 
 
 def readinfodat(infdatfilepath):
-    infile_dat = open(infdatfilepath)
     dat_dict   = {}
-    for sen in infile_dat:
-        if sen[:2] != 'ID':
-            dat_dict[sen.split('       ')[0]] = float(sen.split('       ')[1][:-1])
+    with open(infdatfilepath) as infile_dat:
+        for sen in infile_dat:
+            if sen[:2] != 'ID':
+                dat_dict[sen.split('       ')[0]] = float(sen.split('       ')[1][:-1])
     return dat_dict
 
 

@@ -304,20 +304,63 @@ class SpectrumCropper:
                 xs = [f"{x:.1f}" for row in centers for x, _ in row]
                 ys = [f"{y:.1f}" for row in centers for _, y in row]
                 raise IndexError(f"centers:\ncenters = {centers}\nx = {xs}\ny = {ys}")
-            half_h = min(spec_height//2, cy, ny - cy)
-            half_w = min(spec_width //2, cx, nx - cx)
-            up, dn = int(round(cy - half_h, 0)), int(round(cy + half_h, 0))
-            lf, rt = int(round(cx - half_w, 0)), int(round(cx + half_w, 0))
-            for key in spec2d:
-                spec2d[key] = spec2d[key][up:dn, lf:rt]
-            results.append(spec2d)
+            if spec_width <= 0 or spec_height <= 0:
+                raise ValueError('Crop dimensions must be positive')
+            up = cy - spec_height // 2
+            dn = up + spec_height
+            lf = cx - spec_width // 2
+            rt = lf + spec_width
+            if dn <= 0 or up >= ny or rt <= 0 or lf >= nx:
+                raise ValueError('Crop does not overlap the source spectrum')
             how_cut[f'Set{i}'] = {
                 'UP': up, 'DN': dn, 
                 'LF': lf, 'RT': rt, 
-                'up_flt': cy - half_h, 'dn_flt': cy + half_h,  
-                'lf_flt': cx - half_w, 'rt_flt': cx + half_w, 
+                'up_flt': up, 'dn_flt': dn,
+                'lf_flt': lf, 'rt_flt': rt,
                 }
+        results = self.apply_bounds(self.specs, how_cut)
         return results, how_cut
+
+    @staticmethod
+    def apply_bounds(specs, how_cut):
+        """Apply saved half-open bounds; padded pixels are always masked."""
+        results = []
+        for i, spec2d in enumerate(specs):
+            bounds = how_cut[f'Set{i}']
+            up, dn = int(bounds['UP']), int(bounds['DN'])
+            lf, rt = int(bounds['LF']), int(bounds['RT'])
+            ny, nx = spec2d['flux'].shape
+            if dn <= up or rt <= lf or dn <= 0 or up >= ny or rt <= 0 or lf >= nx:
+                raise ValueError(f'Invalid or non-overlapping crop for Set{i}')
+            y0, y1 = max(up, 0), min(dn, ny)
+            x0, x1 = max(lf, 0), min(rt, nx)
+            pads = ((y0 - up, dn - y1), (x0 - lf, rt - x1))
+            cropped = {}
+            for key, arr in spec2d.items():
+                region = arr[y0:y1, x0:x1]
+                if key == 'mask':
+                    cropped[key] = np.pad(region, pads, constant_values=False)
+                elif key == 'wave':
+                    padded_wave = np.pad(region, pads, mode='edge')
+                    if region.shape[1] > 1:
+                        left_step = np.pad(region[:, 1] - region[:, 0],
+                                           pads[0], mode='edge')
+                        right_step = np.pad(region[:, -1] - region[:, -2],
+                                            pads[0], mode='edge')
+                        for col in range(pads[1][0] - 1, -1, -1):
+                            padded_wave[:, col] = padded_wave[:, col + 1] - left_step
+                        for col in range(pads[1][0] + region.shape[1], rt - lf):
+                            padded_wave[:, col] = padded_wave[:, col - 1] + right_step
+                    cropped[key] = padded_wave
+                else:
+                    cropped[key] = np.pad(region, pads, constant_values=0)
+            coverage = np.zeros((dn - up, rt - lf), dtype=bool)
+            coverage[pads[0][0]:dn-up-pads[0][1],
+                     pads[1][0]:rt-lf-pads[1][1]] = True
+            cropped['coverage'] = coverage
+            cropped['mask'] &= coverage
+            results.append(cropped)
+        return results
 
 
 

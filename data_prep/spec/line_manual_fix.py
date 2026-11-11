@@ -25,7 +25,7 @@ def manual_correct(spec2d, spec_width=20, spec_height=20, tag='A', cont_margin=5
             It contains 'flux', 'wave', 'ivar' keys.
             
     Returns:
-        返回 [y, x] indices
+        返回 [x, y] indices
     """
     print(f'\nManually cutting for this spectrum {tag}...')
     plt.close('all')  # 防止旧窗口残留
@@ -138,5 +138,5 @@ def manual_correct(spec2d, spec_width=20, spec_height=20, tag='A', cont_margin=5
         print("⚠️ No mouse click recorded. Returned None as index.")
         return None
     
-    return idxs[0] # [ix, iy]
+    return idxs[-1] # last click wins; [ix, iy]
 

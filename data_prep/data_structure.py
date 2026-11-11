@@ -18,6 +18,8 @@ class SpecData:
     cont:       np.ndarray
     mask:       np.ndarray
     meta:   dict
+    mask_base: np.ndarray | None = None
+    coverage_mask: np.ndarray | None = None
 
 
 @dataclass

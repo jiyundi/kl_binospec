@@ -1,4 +1,7 @@
 import os
+import matplotlib
+if os.name != 'nt' and not os.environ.get('DISPLAY'):
+    matplotlib.use('Agg')
 import joblib
 import argparse
 import numpy as np
@@ -14,10 +17,9 @@ from image.masking         import mask_neighbor_star, find_mask_pars
 from image.rescale_var     import rescale_var
 from image.read_and_cutout import read_subaru_img_wcs, cutoutimg
 from spec.line_pipeline    import process_single_line
+from spec.crop_plan       import read_plans
 from spec.read_and_cutout  import read_spec2d, stack_spec2d, readinfodat
 
-from   klm.safe_plot import setup; setup() # must before plt
-import matplotlib; matplotlib.use('TkAgg') # Comment out if not using Windows
 import matplotlib.pyplot as plt
 plt.rcParams.update({
     "font.family": "sans-serif",
@@ -51,14 +53,19 @@ if __name__ == '__main__':
     parser.add_argument('--clear_mode',  default='simple', type=str)
     parser.add_argument('--cont_scale',  default=[1.], type=int, nargs='+')
     parser.add_argument('--cont_y0s',    default=[10], type=int, nargs='+')
-    slit_num    = parser.parse_args().slitID
-    spec_width  = parser.parse_args().spec_width
-    spec_height = parser.parse_args().spec_height
-    img_width   = parser.parse_args().img_width
-    img_height  = parser.parse_args().img_height
-    clear_mode  = parser.parse_args().clear_mode
-    cont_scale  = parser.parse_args().cont_scale
-    cont_y0ss   = parser.parse_args().cont_y0s
+    parser.add_argument('--crop_plan', default=None,
+                        help='JSON crop plans; defaults to the output folder')
+    parser.add_argument('--redo_crops', action='store_true',
+                        help='Refit and replace existing crop plans')
+    args = parser.parse_args()
+    slit_num    = args.slitID
+    spec_width  = args.spec_width
+    spec_height = args.spec_height
+    img_width   = args.img_width
+    img_height  = args.img_height
+    clear_mode  = args.clear_mode
+    cont_scale  = args.cont_scale
+    cont_y0ss   = args.cont_y0s
     
     # 1. FOLDER NAMES AND FILENAMES
     img_dir = '../../../RSCH3/HSC_img_A383/'
@@ -73,7 +80,7 @@ if __name__ == '__main__':
     info_fn = f'info.829.{slit_num:03d}.{slit_num+100305:06d}.dat'
     z_table_fn = "../scripts/redshift_table.xlsx"
     Ms_folder  = '../../bagpipes-KL/'
-    real_pkl_folder = '../scripts/binospec_pkl/'
+    real_pkl_folder = '../scripts/binospec_pkl_new/'
     
     # 2. CHECK IF SECURE REDSHIFT IS PROVIDED
     df     = pd.read_excel(z_table_fn, header=None, engine='openpyxl')
@@ -112,10 +119,13 @@ if __name__ == '__main__':
         import sys; sys.exit(0)
     
     # 4. MAKE PKL FOLDER IF NOT EXISTS 
-    if not os.path.exists(real_pkl_folder):
-        os.makedirs(real_pkl_folder)
-        if not os.path.exists(real_pkl_folder+'pkl/'):
-            os.makedirs(real_pkl_folder+'pkl/')
+    os.makedirs(real_pkl_folder+'pkl/', exist_ok=True)
+    plan_path = args.crop_plan or f'{real_pkl_folder}slit_{slit_num:03d}_crops.json'
+    saved_plans = {} if args.redo_crops else read_plans(plan_path)
+    if args.crop_plan and not args.redo_crops:
+        missing = sorted(set(emilines) - set(saved_plans))
+        if missing:
+            raise ValueError(f'Crop plan is missing lines: {missing}')
     
     # 5. META INFORMATION 
     # 5.1) meta gal - this slit (galaxy)
@@ -263,6 +273,8 @@ if __name__ == '__main__':
             clear_mode, 
             cont_scales=cont_scales, 
             cont_y0s=cont_y0s, 
+            crop_plan=saved_plans.get(linename),
+            plan_path=plan_path,
             #manual=False
         )
         
