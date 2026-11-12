@@ -2,11 +2,27 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Current File",
+            "name": "Python: Current File (local)",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "cwd": "${fileDirname}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: data_prep/main.py (local)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/data_prep/main.py",
+            "cwd": "${workspaceFolder}/data_prep",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: data_prep/main.py (HPC)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/data_prep/main.py",
+            "cwd": "${workspaceFolder}/data_prep",
             "python": "/home/u9/jiyundi/miniconda3/envs/KL-env/bin/python",
             "console": "integratedTerminal"
         }

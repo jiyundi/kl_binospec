@@ -17,15 +17,19 @@ def snr_estimate(
             var = var_poisson
 
         else: # data_is_noisy
-            if noise_var == 0:
-                raise TypeError(
-                    f'Noise variance is required since you specified data is noisy.'
-                    )
+            if var_given is not None: # common for Binospec data
+                var = var_given
 
-            if noise_var == 'extract': # common for real data, not knowing it
-                noise_var = bkg_estimate(image)[2]**2
+            else:
+                if noise_var == 0:
+                    raise TypeError(
+                        f'Noise variance is required since you specified data is noisy.'
+                        )
 
-            var = var_poisson + noise_var
+                if noise_var == 'extract': # common for real data, not knowing it
+                    noise_var = bkg_estimate(image)[2]**2
+
+                var = var_poisson + noise_var
 
     else: # bkg_is_subtracted, common for Binospec data
         if mock_bkg is None:

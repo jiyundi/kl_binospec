@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from core.find_snr  import snr_estimate
+
 
 def rot_rectangle(ax, x0, y0, dx, dy, rotation, color, ls):
     xUL = x0 + (-dx/2)*np.cos(rotation) - (+dy/2)*np.sin(rotation)
@@ -62,8 +64,9 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
             
             spec_data = data_info.spec[j*n_sets+i].data
             spec_mask = data_info.spec[j*n_sets+i].mask
+            spec_var  = data_info.spec[j*n_sets+i].var
             
-            noise = np.nanstd(spec_data[spec_mask])
+            # noise = np.nanstd(spec_data[spec_mask])
             ny, nx = spec_data.shape
             xmin =  data_info.spec[j*n_sets+i].meta['lambda_grid'][0, 0].value # x_left
             xmax =  data_info.spec[j*n_sets+i].meta['lambda_grid'][0,-1].value # x_right
@@ -72,7 +75,7 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
             im_spec = ax1.imshow(np.where(spec_mask, spec_data, np.nan), 
                                  extent=[xmin, xmax, ymin, ymax],
                                  cmap='viridis', aspect='auto', origin='lower', 
-                                 vmin=0-noise, vmax=0 + 5*noise, 
+                                #  vmin=0-noise, vmax=0 + 5*noise, 
                                  zorder=1
                                  )
             fig.colorbar(im_spec, ax=ax1)
@@ -99,17 +102,17 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
                          fontsize=10, color='orangered', ha='right', va='bottom', 
                          transform=ax1.transAxes)
             
-            spec_var1 = spec_data # as a Poisson noise
-            spec_var2 = data_info.spec[j*n_sets+i].var
-            specSNR   = solve_snr(spec_data[spec_mask], 
-                                  spec_var1[spec_mask] + spec_var2[spec_mask], 
-                                  "spec")
-            ax1.text(0.98, 0.98, 
-                     f'Min: {np.min(spec_data[spec_mask]):.1f}'+'\n'+
-                     f'Max: {np.max(spec_data[spec_mask]):.1f}'+'\n'+ 
-                     f'SNR: {specSNR:.0f}',
-                     fontsize=10, color='orangered', ha='right', va='top', 
-                     transform=ax1.transAxes)
+            spec_snr = snr_estimate(
+                np.where(spec_mask, spec_data, np.nan),
+                bkg_is_subtracted=False, 
+                var_given=spec_var
+            )
+            ax1.text(
+                0.98, 0.98, 
+                f'SNR={spec_snr:.1f}', 
+                fontsize=10, color='orangered', ha='right', va='top', 
+                transform=ax1.transAxes
+            )
             sets_slitRA.append(slitRA)
             sets_slitDec.append(slitDec)
     sets_slitRA  = sets_slitRA[ : n_sets] # first n_sets entries
@@ -129,10 +132,11 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
         image_data = data_info.image.data
         # image_data = np.where(image_data>-1, 
         #                       image_data, 0)
-        noise = np.nanstd(np.where(image_mask, image_data, np.nan))
+        # noise = np.nanstd(np.where(image_mask, image_data, np.nan))
         im_imag = ax2.imshow(np.where(image_mask, image_data, np.nan),  
                              cmap='viridis', aspect='equal', 
-                             vmin=0-noise, vmax=0 + 5*noise)
+                            #  vmin=0-noise, vmax=0 + 5*noise
+                             )
         fig.colorbar(im_imag, ax=ax2)
         x0obj,  y0obj  = ap_wcs.wcs_world2pix([[objRA,  objDec ]], 0)[0]  
         x0slit, y0slit = ap_wcs.wcs_world2pix([[sets_slitRA[i], sets_slitDec[i]]], 0)[0]  
@@ -147,8 +151,6 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
                                image_var1[image_mask] + image_var2[image_mask], 
                                "image")
         ax2.text(0.98, 0.98, 
-                 f'Min = {np.nanmin(image_data[image_mask]):.1f}'+'\n'+
-                 f'Max = {np.nanmax(image_data[image_mask]):.1f}'+'\n'+
                  f'SNR = {imageSNR:.0f}',
                  fontsize=10, color='orangered', ha='right', va='top', 
                  transform=ax2.transAxes)

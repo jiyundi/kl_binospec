@@ -45,18 +45,16 @@ _all_emilines_supported = {
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
-    parser.add_argument('--slitID', default=7, type=int)
+    parser.add_argument('--slitID', default=3, type=int)
     parser.add_argument('--spec_width',  default=40, type=int)
-    parser.add_argument('--spec_height', default=20, type=int)
-    parser.add_argument('--img_width',   default=20, type=int)
-    parser.add_argument('--img_height',  default=20, type=int)
+    parser.add_argument('--spec_height', default=40, type=int)
+    parser.add_argument('--img_width',   default=40, type=int)
+    parser.add_argument('--img_height',  default=40, type=int)
     parser.add_argument('--clear_mode',  default='simple', type=str)
     parser.add_argument('--cont_scale',  default=[1.], type=int, nargs='+')
     parser.add_argument('--cont_y0s',    default=[10], type=int, nargs='+')
-    parser.add_argument('--crop_plan', default=None,
+    parser.add_argument('--crop_plan',   default='None',
                         help='JSON crop plans; defaults to the output folder')
-    parser.add_argument('--redo_crops', action='store_true',
-                        help='Refit and replace existing crop plans')
     args = parser.parse_args()
     slit_num    = args.slitID
     spec_width  = args.spec_width
@@ -118,14 +116,13 @@ if __name__ == '__main__':
         print('Process stopped because no line provided for cutting.')
         import sys; sys.exit(0)
     
-    # 4. MAKE PKL FOLDER IF NOT EXISTS 
+    # 4. REQUIRE SAVED MANUAL CROP PLANS FOR EVERY LINE
+    plan_path = args.crop_plan if args.crop_plan is None else f'slit_{slit_num:03d}_crops.json'
+    saved_plans = read_plans(plan_path)
+    missing = sorted(set(emilines) - set(saved_plans))
+    if missing:
+        raise ValueError(f'Manual crop plan {plan_path} is missing lines: {missing}')
     os.makedirs(real_pkl_folder+'pkl/', exist_ok=True)
-    plan_path = args.crop_plan or f'{real_pkl_folder}slit_{slit_num:03d}_crops.json'
-    saved_plans = {} if args.redo_crops else read_plans(plan_path)
-    if args.crop_plan and not args.redo_crops:
-        missing = sorted(set(emilines) - set(saved_plans))
-        if missing:
-            raise ValueError(f'Crop plan is missing lines: {missing}')
     
     # 5. META INFORMATION 
     # 5.1) meta gal - this slit (galaxy)
@@ -278,8 +275,6 @@ if __name__ == '__main__':
             cont_scales=cont_scales, 
             cont_y0s=cont_y0s, 
             crop_plan=saved_plans.get(linename),
-            plan_path=plan_path,
-            #manual=False
         )
         
         # 7.4.3) add to list
