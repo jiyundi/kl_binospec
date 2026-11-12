@@ -18,6 +18,14 @@
 python main.py --slitID 7 --crop_plan /absolute/path/slit_007_crops.json
 ```
 
+Windows 本地也可以重放。在 `data_prep/` 目录使用当前目录中的方案，例如：
+
+```powershell
+python main.py --slitID 112 --crop_plan ./slit_112_crops.json --spec_width 40 --spec_height 40
+```
+
+上述宽高对应此方案的 40×40 切片；脚本默认高度为 20，若要保留 Notebook 中的尺寸，须显式指定。方案放在当前目录时必须传入 `--crop_plan`，否则脚本只查找输出目录，可能进入交互裁切。
+
 如果不传 `--crop_plan`，默认查找输出目录的 `slit_007_crops.json`。有方案时跳过拟合和交互，重放固定尺寸切片；默认方案缺少某条线时进入原有交互流程。显式传入 `--crop_plan` 而缺少某条线时会报错，避免 HPC 作业停在输入提示。`--redo_crops` 会重新拟合并覆盖对应方案。若命令行指定新的裁切宽高，会围绕保存的最终线心重新计算固定尺寸边界，不再拟合。红移或波长与方案不符时会报错。
 
 越界像素的 flux 和方差填零，`coverage_mask` 与 `mask_base` 标记无效位置；波长网格在边缘按局部步长外推供绘图使用。连续谱、背景方差和线宽仅在真实覆盖的矩形区域估计，然后映射到固定尺寸数组。最终 pkl 在原有字段之外保存这两个 mask。
@@ -31,3 +39,24 @@ python -m data_prep.reestimate_variance input.pkl output.pkl
 ```
 
 输入须为新流程产生、含有 `mask_base` 和 `coverage_mask` 的 pkl。命令只更新成像和光谱方差，以及依赖新方差的最终光谱 mask；不会重新裁切、重新拟合线心或重新计算连续谱。输出路径必须与输入不同。
+
+
+## 光谱总方差（管线 err²）
+
+`main.py` 同时读取各观测目录的 `obj_counts_slits_lin.fits` 和
+`obj_counts_err_slits_lin.fits`。按 `SLITTARG` 定位目标，核对 split 光谱
+（允许导出时的 −200 截断）与 counts 像素，以及 counts/err 坐标头。
+缺少文件或对应不一致时直接报错，不退回经验背景估计。HPC 需保留这两个文件。
+
+总方差为 `err**2`，与光谱一起翻转、按相同方案裁切。Set A 为三份观测的
+算术平均，总方差为 `(err1**2 + err2**2 + err3**2) / 9`。未覆盖全部输入的
+行、无效误差和管线误差下限 `err <= 1` 的像素不参与拟合。
+
+新 pkl 保存 `var_total`。为兼容下游的 `data + var`，保存
+`var = var_total - data`（data 已扣连续谱），使实际总方差恰为 `var_total`。
+此时 `var` 是有效加性项，不能解释为独立测量的高斯背景方差，也不要求其
+自身为正。补齐区域的 var 和 var_total 为零。
+
+重新运行原有裁切重放命令即可生成新 pkl；旧文件不会自动改变。
+`reestimate_variance` 对含 `var_total` 的新 pkl 保留管线总方差；对不含该字段
+的旧 pkl 仍使用经验估计，不能单靠该命令将旧文件升级为管线方差。

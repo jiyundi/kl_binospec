@@ -1,6 +1,22 @@
 import numpy as np
 
 
+def from_total_variance(data, mask, total_variance):
+    """Keep the legacy data + var contract while using pipeline total variance.
+
+    The returned var = total_variance - data is an effective additive term,
+    not a separately measured Gaussian background variance; it may be negative.
+    Never add the photon counts again to total_variance.
+    """
+    total = np.asarray(total_variance, dtype=float)
+    if data.shape != total.shape or mask.shape != data.shape:
+        raise ValueError('Data, mask and total variance must have identical shapes')
+    valid = np.isfinite(data) & np.isfinite(total) & (total > 0)
+    variance = np.zeros(data.shape, dtype=float)
+    variance[valid] = total[valid] - data[valid]
+    return variance, mask & valid
+
+
 def build_var(data, mask, option=2): 
     """ This generates a uniform Gaussian noise level for all pixels. """
     

@@ -1,7 +1,7 @@
 # Ignore this syntax check since it's an iPython command:
 # %matplotlib qt
-import os
-os.environ["QT_QPA_PLATFORM"] = "xcb"
+# Let Qt select the native platform plugin (e.g. windows on Windows).
+# Do not override a platform explicitly selected by the caller.
 
 import numpy as np
 import matplotlib.patches as patches

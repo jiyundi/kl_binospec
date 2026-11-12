@@ -1,0 +1,153 @@
+{
+  "mapping_checks": [
+    {
+      "folder": "psf_m1/231023",
+      "extension": "TARGET 112",
+      "split_flux_identical_after_negative_200_clip": true,
+      "negative_200_clipped_pixels": 130,
+      "counts_err_coordinate_headers_match": true,
+      "shape": [
+        55,
+        5632
+      ]
+    },
+    {
+      "folder": "psf_m1/231218",
+      "extension": "TARGET 112",
+      "split_flux_identical_after_negative_200_clip": true,
+      "negative_200_clipped_pixels": 56,
+      "counts_err_coordinate_headers_match": true,
+      "shape": [
+        55,
+        5632
+      ]
+    },
+    {
+      "folder": "psf_m1/240115",
+      "extension": "TARGET 112",
+      "split_flux_identical_after_negative_200_clip": true,
+      "negative_200_clipped_pixels": 50,
+      "counts_err_coordinate_headers_match": true,
+      "shape": [
+        55,
+        5632
+      ]
+    },
+    {
+      "folder": "psf/231019",
+      "extension": "TARGET 112",
+      "split_flux_identical_after_negative_200_clip": true,
+      "negative_200_clipped_pixels": 50,
+      "counts_err_coordinate_headers_match": true,
+      "shape": [
+        55,
+        5632
+      ]
+    },
+    {
+      "folder": "psf_p1/231019",
+      "extension": "TARGET 112",
+      "split_flux_identical_after_negative_200_clip": true,
+      "negative_200_clipped_pixels": 215,
+      "counts_err_coordinate_headers_match": true,
+      "shape": [
+        55,
+        5632
+      ]
+    }
+  ],
+  "source_hashes_verified": true,
+  "pkl_crop_verified": true,
+  "statistics": [
+    {
+      "line": "O2",
+      "set": "A",
+      "valid_pixels": 1599,
+      "floor_pixels": 0,
+      "median_I_effective": 44.27276075703745,
+      "median_pipeline_variance": 49.60609409037079,
+      "median_pipeline_sigma": 7.043159382718155,
+      "median_current_variance": 26.766908926340417,
+      "edge_residual_std": 5.21398446199024,
+      "edge_normalized_mean": -0.17106554779728655,
+      "edge_normalized_std": 0.7462325756377601,
+      "edge_pixels": 1199
+    },
+    {
+      "line": "O2",
+      "set": "C",
+      "valid_pixels": 1597,
+      "floor_pixels": 0,
+      "median_I_effective": 101.72317051029313,
+      "median_pipeline_variance": 117.72317051029313,
+      "median_pipeline_sigma": 10.850030899047852,
+      "median_current_variance": 65.66772801717293,
+      "edge_residual_std": 8.20476652223698,
+      "edge_normalized_mean": -0.19414611138711385,
+      "edge_normalized_std": 0.7599796220946002,
+      "edge_pixels": 1198
+    },
+    {
+      "line": "O2",
+      "set": "B",
+      "valid_pixels": 1600,
+      "floor_pixels": 0,
+      "median_I_effective": 197.5602948515575,
+      "median_pipeline_variance": 213.5602948515575,
+      "median_pipeline_sigma": 14.613702297210693,
+      "median_current_variance": 116.26055664650826,
+      "edge_residual_std": 10.909683288688315,
+      "edge_normalized_mean": -0.3009705649527721,
+      "edge_normalized_std": 0.7604565705397972,
+      "edge_pixels": 1200
+    },
+    {
+      "line": "O3b",
+      "set": "A",
+      "valid_pixels": 1600,
+      "floor_pixels": 0,
+      "median_I_effective": 31.87572603546985,
+      "median_pipeline_variance": 37.20905936880318,
+      "median_pipeline_sigma": 6.099922897487982,
+      "median_current_variance": 27.365296471803997,
+      "edge_residual_std": 5.271277556953599,
+      "edge_normalized_mean": -0.17951896140419643,
+      "edge_normalized_std": 0.870778241547923,
+      "edge_pixels": 1200
+    },
+    {
+      "line": "O3b",
+      "set": "C",
+      "valid_pixels": 1600,
+      "floor_pixels": 0,
+      "median_I_effective": 67.40842964520425,
+      "median_pipeline_variance": 83.40842964520425,
+      "median_pipeline_sigma": 9.132821559906006,
+      "median_current_variance": 57.38507684096784,
+      "edge_residual_std": 7.648710506416092,
+      "edge_normalized_mean": -0.18358872371145316,
+      "edge_normalized_std": 0.8500122666695571,
+      "edge_pixels": 1200
+    },
+    {
+      "line": "O3b",
+      "set": "B",
+      "valid_pixels": 1600,
+      "floor_pixels": 0,
+      "median_I_effective": 127.73658604202228,
+      "median_pipeline_variance": 143.73658604202228,
+      "median_pipeline_sigma": 11.989019393920898,
+      "median_current_variance": 97.76439560139639,
+      "edge_residual_std": 10.012347983707867,
+      "edge_normalized_mean": -0.26338140341044597,
+      "edge_normalized_std": 0.8499146463901628,
+      "edge_pixels": 1200
+    }
+  ],
+  "caveats": [
+    "I is formula-inferred, not directly observed raw counts.",
+    "A uses sum(variance_j)/9, not mean(variance_j). Its inferred I is an effective variance contribution.",
+    "Edge pixels may contain line wings, continuum-fit residuals, and correlated resampling noise.",
+    "Local pipeline source may differ from historical execution version."
+  ]
+}

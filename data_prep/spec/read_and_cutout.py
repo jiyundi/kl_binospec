@@ -1,8 +1,9 @@
 import numpy as np
+from pathlib import Path
 from   astropy.io  import fits
 
 
-def read_spec2d(spec2dfilepath):
+def read_spec2d(spec2dfilepath, with_variance=False):
     with fits.open(spec2dfilepath) as hdul:
         farr = hdul[1].data['FLUX'][0, :, :].copy()
         warr = hdul[1].data['LAMBDA'][0, :, :].copy()
@@ -10,7 +11,49 @@ def read_spec2d(spec2dfilepath):
     farr = np.nan_to_num(farr, nan=-200) # replace nan with negatives
     warr = np.nan_to_num(warr, nan=0)
     
-    return {'flux': farr, 'wave': warr}
+    result = {'flux': farr, 'wave': warr}
+    if with_variance:
+        path = Path(spec2dfilepath)
+        target = int(path.stem.split('.')[-1])
+        folder = path.parent.parent
+        with fits.open(folder / 'obj_counts_slits_lin.fits') as hdul:
+            matches = [h for h in hdul[1:] if h.header.get('SLITTARG') == target]
+            if len(matches) != 1:
+                raise ValueError(f'Expected one counts extension for target {target}')
+            counts = matches[0]
+            # The split export clips values below -200, including NaN sentinels.
+            reference = np.nan_to_num(np.maximum(counts.data, -200), nan=-200)
+            if reference.shape != farr.shape or not np.array_equal(reference, farr):
+                raise ValueError(f'Split/counts pixel mismatch: {path}')
+            keys = ('SLITTARG', 'SIDE', 'SLITID', 'CRPIX1', 'CRVAL1',
+                    'CDELT1', 'CTYPE1', 'CUNIT1', 'CRPIX2', 'CRVAL2', 'CDELT2')
+            with fits.open(folder / 'obj_counts_err_slits_lin.fits') as errors:
+                err = errors[counts.name]
+                if (err.data.shape != farr.shape or
+                        any(err.header.get(k) != counts.header.get(k) for k in keys)):
+                    raise ValueError(f'Counts/error coordinate mismatch: {path}')
+                sigma = np.asarray(err.data, dtype=float)
+                # Pipeline's sigma=1 floor is not a reliable noise measurement.
+                result['var_total'] = np.where(
+                    np.isfinite(sigma) & (sigma > 1), sigma**2, np.nan)
+    return result
+
+
+def stack_mean_variance(*variances):
+    """Variance of independent spectra averaged by stack_spec2d (equal weights).
+
+    Rows absent from any input remain invalid rather than treating padding as
+    another measured exposure. Flux stacking and saved crop hashes are unchanged.
+    """
+    if not variances or any(v.ndim != 2 for v in variances):
+        raise ValueError('Expected 2D input variances')
+    if len({v.shape[1] for v in variances}) != 1:
+        raise ValueError('Variance wavelength dimensions differ')
+    max_rows = max(v.shape[0] for v in variances)
+    padded = [np.pad(np.asarray(v, dtype=float),
+                     ((0, max_rows-v.shape[0]), (0, 0)), constant_values=np.nan)
+              for v in variances]
+    return np.sum(padded, axis=0) / len(variances)**2
 
 
 def readinfodat(infdatfilepath):

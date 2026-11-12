@@ -78,7 +78,7 @@ def extract_2d_continuum(flux, mask,
     plt.colorbar(im3, ax=ax[3])
     ax[0].set_title('Data')
     ax[1].set_title(f'Continuum (mode: {mode})')
-    ax[2].set_title('Data - Continuum')
+    ax[2].set_title('Edge residuals (10 rows)')
     ax[3].set_title('Data - Continuum')
     # print(f'Continuum.py: Top 5 rows sum: {np.nansum(arr_flux[-5:]-model[-5:]):.1f}')
     # print(f'Continuum.py: Btm 5 rows sum: {np.nansum(arr_flux[ :5]-model[ :5]):.1f}')

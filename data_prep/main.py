@@ -18,7 +18,7 @@ from image.rescale_var     import rescale_var
 from image.read_and_cutout import read_subaru_img_wcs, cutoutimg
 from spec.line_pipeline    import process_single_line
 from spec.crop_plan       import read_plans
-from spec.read_and_cutout  import read_spec2d, stack_spec2d, readinfodat
+from spec.read_and_cutout  import read_spec2d, stack_spec2d, readinfodat, stack_mean_variance
 
 import matplotlib.pyplot as plt
 plt.rcParams.update({
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     spec_fn = f'spec2d.829.{slit_num:03d}.{slit_num+100305:06d}.fits'
     info_fn = f'info.829.{slit_num:03d}.{slit_num+100305:06d}.dat'
     z_table_fn = "../scripts/redshift_table.xlsx"
-    Ms_folder  = '../../bagpipes-KL/'
+    Ms_folder  = '../bagpipes-KL/'
     real_pkl_folder = '../scripts/binospec_pkl_new/'
     
     # 2. CHECK IF SECURE REDSHIFT IS PROVIDED
@@ -209,15 +209,19 @@ if __name__ == '__main__':
     # -------------------------------------------------------------
     
     # 7.1) read raw specs
-    spec_C = read_spec2d(spec_dir_2  + spec_fn)
-    spec_B = read_spec2d(spec_dir_3  + spec_fn)
-    A1     = read_spec2d(spec_dir_1a + spec_fn)
-    A2     = read_spec2d(spec_dir_1b + spec_fn)
-    A3     = read_spec2d(spec_dir_1c + spec_fn)
+    spec_C = read_spec2d(spec_dir_2  + spec_fn, with_variance=True)
+    spec_B = read_spec2d(spec_dir_3  + spec_fn, with_variance=True)
+    A1     = read_spec2d(spec_dir_1a + spec_fn, with_variance=True)
+    A2     = read_spec2d(spec_dir_1b + spec_fn, with_variance=True)
+    A3     = read_spec2d(spec_dir_1c + spec_fn, with_variance=True)
+    if not (np.array_equal(A1['wave'][0], A2['wave'][0]) and
+            np.array_equal(A1['wave'][0], A3['wave'][0])):
+        raise ValueError('Set A wavelength grids differ; resampling is required')
     nrowsA = np.max([len(A1['flux']), len(A2['flux']), len(A3['flux'])])
     spec_A = {
         'wave': np.tile(A1['wave'][0, :], (nrowsA, 1)),
         'flux': stack_spec2d(A1['flux'], A2['flux'], A3['flux']),
+        'var_total': stack_mean_variance(A1['var_total'], A2['var_total'], A3['var_total']),
         }
     
     # 7.2) convert to bottom -> top 

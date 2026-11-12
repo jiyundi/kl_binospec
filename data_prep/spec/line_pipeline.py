@@ -3,7 +3,7 @@ import astropy.units as u
 from   scipy.ndimage  import median_filter
 
 from  data_structure   import SpecData
-from .build_var          import build_var
+from .build_var          import from_total_variance
 from .continuum          import extract_2d_continuum
 from .line_center_crop   import EmissionProcessor
 from .line_manual_fix    import manual_correct
@@ -152,7 +152,10 @@ def process_single_line(specs, lineinfo, meta_raws,
             cont_y0=(cont_y0s[i] - y0 if cont_y0s is not None else None),
             mode=clear_mode, verbose=False, smooth=9)
         residual = valid_flux - cont
-        variance, final_mask = build_var(residual, base_mask, option=2)
+        # Downstream uses data + var: store err^2 - residual to avoid
+        # counting the source Poisson contribution twice.
+        variance, final_mask = from_total_variance(
+            residual, base_mask, cropped['var_total'][inner])
         wave_step = np.mean(np.diff(cropped['wave'][y0, x0:x1]))
         profile = find_line_sigma(
             median_filter(residual, size=3), lineinfo.name,
@@ -218,7 +221,8 @@ def process_single_line(specs, lineinfo, meta_raws,
                     mask = mask_addedA,
                     meta = meta_specA,
                     mask_base = spec2dACB[0]['mask'],
-                    coverage_mask = spec2dACB[0]['coverage']
+                    coverage_mask = spec2dACB[0]['coverage'],
+                    var_total = spec2dACB[0]['var_total']
                     )
     SetC = SpecData(data = fluxC,
                     var  = varC,
@@ -226,7 +230,8 @@ def process_single_line(specs, lineinfo, meta_raws,
                     mask = mask_addedC,
                     meta = meta_specC,
                     mask_base = spec2dACB[1]['mask'],
-                    coverage_mask = spec2dACB[1]['coverage']
+                    coverage_mask = spec2dACB[1]['coverage'],
+                    var_total = spec2dACB[1]['var_total']
                     )
     SetB = SpecData(data = fluxB,
                     var  = varB,
@@ -234,7 +239,8 @@ def process_single_line(specs, lineinfo, meta_raws,
                     mask = mask_addedB,
                     meta = meta_specB,
                     mask_base = spec2dACB[2]['mask'],
-                    coverage_mask = spec2dACB[2]['coverage']
+                    coverage_mask = spec2dACB[2]['coverage'],
+                    var_total = spec2dACB[2]['var_total']
                     )
     spec_data_list = [SetA, SetC, SetB]
 

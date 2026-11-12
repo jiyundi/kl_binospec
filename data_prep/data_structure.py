@@ -20,6 +20,8 @@ class SpecData:
     meta:   dict
     mask_base: np.ndarray | None = None
     coverage_mask: np.ndarray | None = None
+    # Pipeline total variance; var retains the legacy data + var convention.
+    var_total: np.ndarray | None = None
 
 
 @dataclass
