@@ -21,8 +21,8 @@ def read_spec2d(spec2dfilepath, with_variance=False):
             if len(matches) != 1:
                 raise ValueError(f'Expected one counts extension for target {target}')
             counts = matches[0]
-            # The split export clips values below -200, including NaN sentinels.
-            reference = np.nan_to_num(np.maximum(counts.data, -200), nan=-200)
+            # The split export clips flux to [-200, 10000], including NaN sentinels.
+            reference = np.nan_to_num(np.clip(counts.data, -200, 10000), nan=-200)
             if reference.shape != farr.shape or not np.array_equal(reference, farr):
                 raise ValueError(f'Split/counts pixel mismatch: {path}')
             keys = ('SLITTARG', 'SIDE', 'SLITID', 'CRPIX1', 'CRVAL1',

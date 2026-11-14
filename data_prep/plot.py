@@ -66,8 +66,6 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
             spec_mask = data_info.spec[j*n_sets+i].mask
             spec_var  = data_info.spec[j*n_sets+i].var
             
-            # noise = np.nanstd(spec_data[spec_mask])
-            ny, nx = spec_data.shape
             xmin =  data_info.spec[j*n_sets+i].meta['lambda_grid'][0, 0].value # x_left
             xmax =  data_info.spec[j*n_sets+i].meta['lambda_grid'][0,-1].value # x_right
             ymin = -data_info.spec[j*n_sets+i].meta['pixScale']*len(spec_data)/2 # y_bottom
@@ -130,12 +128,8 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
         
         image_mask = data_info.image.mask
         image_data = data_info.image.data
-        # image_data = np.where(image_data>-1, 
-        #                       image_data, 0)
-        # noise = np.nanstd(np.where(image_mask, image_data, np.nan))
         im_imag = ax2.imshow(np.where(image_mask, image_data, np.nan),  
-                             cmap='viridis', aspect='equal', 
-                            #  vmin=0-noise, vmax=0 + 5*noise
+                             cmap='viridis', aspect='equal'
                              )
         fig.colorbar(im_imag, ax=ax2)
         x0obj,  y0obj  = ap_wcs.wcs_world2pix([[objRA,  objDec ]], 0)[0]  

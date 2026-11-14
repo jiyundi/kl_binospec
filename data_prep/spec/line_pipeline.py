@@ -3,7 +3,7 @@ import astropy.units as u
 from   scipy.ndimage import median_filter
 
 from  data_structure import SpecData
-from .build_var      import from_total_variance
+from .build_var      import from_total_variance, build_var
 from .continuum      import extract_2d_continuum
 from .crop_plan      import replay_plan
 
@@ -56,51 +56,75 @@ def process_single_line(specs, lineinfo, meta_raws,
         if np.isnan(cont).all():
             print(f'WARNING: Continuum is all NaN for Set {_spec_idx_map[i]}; skipping subtraction.')
             cont = np.zeros_like(valid_flux)
-        residual = valid_flux - cont
+        spec_after_cont = valid_flux - cont
 
-        # Var estimated by the MMT Binospec pipeline
-        variance, final_mask = from_total_variance(
-            residual, base_mask, cropped['var_total'][inner]
+        # Read out MMT Binospec pipeline
+        spec_total_var, final_mask = from_total_variance(
+            spec_after_cont, base_mask, cropped['var_total'][inner]
         )
-        
-        # Raw counts (I) = Data (D) + Background (B0) if a good background (B0) can 
-        # be estimated. Here, D := Emission line (F) + Continuum (C). A robust 
-        # signal-to-noise ratio (SNR) requires an I or D, giving 
-        # SNR = Sum(I or D) / SQRT(Sum(Var)). 
 
-        # However, the MMT Binospec pipeline may subtract an inproperate background 
-        # level (B0 + dB) and only D' = I - B0 - dB = D - dB is provided. One can find
-        # the data has background pixels bkg_estimate(D') < 0 which hints the bias 
-        # dB := -bkg_estimate(D') > 0. 
+        """
+        Background subtraction fix
 
-        # Hence, for a better-defined SNR, D' needs to be reverted to D:
-        # D = D' + dB = D' - bkg_estimate(D')
+        Raw counts (I) = Data (D) + Background (B0) if a good background (B0) can 
+        be estimated. Here, D := Emission line (F) + Continuum (C). A robust 
+        signal-to-noise ratio (SNR) requires an I or D, giving 
+        SNR = Sum(I or D) / SQRT(Sum(Var)). 
+
+        However, the MMT Binospec pipeline may subtract an inproperate background 
+        level (B0 + dB) and only D' = I - B0 - dB = D - dB is provided. One can find
+        the data has background pixels bkg_estimate(D') < 0 which hints the bias 
+        dB := -bkg_estimate(D') > 0. 
+
+        Hence, for a better-defined SNR, D' needs to be reverted to D:
+        D = D' + dB = D' - bkg_estimate(D')
+        """
         try: 
-            bkg_est = bkg_estimate(residual)[0]
+            bkg_est = bkg_estimate(spec_after_cont)[0]
+            print(f'Estimated bkg = {bkg_est:.1f}')
         except AssertionError: 
             print('No significant emission structure was detected. Set bkg to 0.')
             bkg_est = 0
-        residual = residual - bkg_est
+        spec_after_bkg_fixed = spec_after_cont - bkg_est
+
+        # # In practice, raw Binospec var is over-estimated and needs to be rescaled
+        # spec_var_expected, mask_expected = build_var(
+        #     spec_after_bkg_fixed, final_mask
+        # )
+        # # spec_var_expected = spec_var_expected_sum
+        # level_expected = np.median(spec_var_expected[mask_expected])
+        # level_raw      = np.median(spec_noise_var_raw[final_mask])
+        # rescale_factor = level_expected / level_raw
+        # spec_noise_var = spec_noise_var_raw * rescale_factor
+        # spec_total_var = (
+        #     median_filter(spec_after_bkg_fixed, size=3) # as Poisson shot noise
+        #     + spec_noise_var     # as Gaussian white noise
+        # )
+        # final_mask &= (spec_total_var > 0)
+        
+        # Check SNR feasiblity
         spec_snr = snr_estimate(
-            np.where(final_mask, residual, np.nan),
+            np.where(final_mask, spec_after_bkg_fixed, np.nan),
             bkg_is_subtracted=False, 
-            var_given=variance
+            var_given=spec_total_var
         )
         print(f'Spec SNR (Set {i}):', round(spec_snr, 1), )
 
+        # Calculate LPF
+        print('Calculating line profile function...')
         wave_step = np.mean(np.diff(cropped['wave'][y0, x0:x1]))
         profile = find_line_sigma(
-            median_filter(residual, size=3), lineinfo.name,
+            median_filter(spec_after_bkg_fixed, size=3), lineinfo.name,
             lambda_scale=wave_step
         )
         
         full_shape = cropped['flux'].shape
         full_cont  = np.zeros(full_shape, dtype=cont.dtype)
-        full_flux  = np.zeros(full_shape, dtype=residual.dtype)
-        full_var   = np.zeros(full_shape, dtype=variance.dtype)
+        full_flux  = np.zeros(full_shape, dtype=spec_after_bkg_fixed.dtype)
+        full_var   = np.zeros(full_shape, dtype=spec_total_var.dtype)
         full_mask  = np.zeros(full_shape, dtype=bool)
-        full_cont[inner], full_flux[inner] = cont, residual
-        full_var[inner],  full_mask[inner] = variance, final_mask
+        full_cont[inner], full_flux[inner] = cont, spec_after_bkg_fixed
+        full_var[inner],  full_mask[inner] = spec_total_var, final_mask
 
         if x0:
             for component in profile:

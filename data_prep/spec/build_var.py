@@ -2,18 +2,18 @@ import numpy as np
 
 
 def from_total_variance(data, mask, total_variance):
-    """Keep the legacy data + var contract while using pipeline total variance.
-
-    The returned var = total_variance - data is an effective additive term,
-    not a separately measured Gaussian background variance; it may be negative.
-    Never add the photon counts again to total_variance.
+    """
+    Keep the legacy data + var contract while using pipeline total variance.
     """
     total = np.asarray(total_variance, dtype=float)
     if data.shape != total.shape or mask.shape != data.shape:
         raise ValueError('Data, mask and total variance must have identical shapes')
+    
     valid = np.isfinite(data) & np.isfinite(total) & (total > 0)
+
     variance = np.zeros(data.shape, dtype=float)
-    variance[valid] = total[valid] - data[valid]
+    variance[valid] = total[valid] # - data[valid]
+
     return variance, mask & valid
 
 
@@ -46,21 +46,6 @@ def build_var(data, mask, option=2):
             gaussian_background_noise = np.nanstd(data[mask_var & mask])
         
         spec_var = np.ones(data.shape) * gaussian_background_noise**2
-        
-        # mask_sides  = np.ones(mask.shape, dtype=bool)
-        # mask_sides[:,mask.shape[1]//4:-mask.shape[1]//4] = False
-        # mask_bkgrnd = mask_sides & mask
-        
-        # # at least one entry are True
-        # if mask_bkgrnd.any() == True: 
-        #     data_masked = data[mask_bkgrnd]
-        # # all entries are False
-        # elif mask_bkgrnd.any() == False: 
-        #     data_masked = data[mask]
-        
-        # noise_level = np.std(data_masked)
-        # back_noise  = np.ones(data.shape) * noise_level
-        # spec_var    = back_noise**2
     
     # Rescaled var may be: var + data <= 0. Mask out these px
     mask_add   = ((data + spec_var) > 0)

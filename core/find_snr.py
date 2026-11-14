@@ -6,7 +6,7 @@ from core.find_bkg import bkg_estimate
 def snr_estimate(
     image, 
     bkg_is_subtracted=True, mock_bkg=None, restore_CCD_flux=True, 
-    data_is_noisy=None, noise_var=0, 
+    data_is_noisy=True, noise_var=0, 
     var_given=None
 ):
     if bkg_is_subtracted == False:

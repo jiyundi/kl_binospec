@@ -45,9 +45,9 @@ _all_emilines_supported = {
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
-    parser.add_argument('--slitID', default=3, type=int)
-    parser.add_argument('--spec_width',  default=40, type=int)
-    parser.add_argument('--spec_height', default=40, type=int)
+    parser.add_argument('--slitID', default=7, type=int)
+    parser.add_argument('--spec_width',  default=30, type=int)
+    parser.add_argument('--spec_height', default=30, type=int)
     parser.add_argument('--img_width',   default=40, type=int)
     parser.add_argument('--img_height',  default=40, type=int)
     parser.add_argument('--clear_mode',  default='simple', type=str)
