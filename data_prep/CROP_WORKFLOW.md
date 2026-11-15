@@ -21,12 +21,12 @@ python main.py --slitID 7 --crop_plan /absolute/path/slit_007_crops.json
 Windows 本地也可以重放。在 `data_prep/` 目录使用当前目录中的方案，例如：
 
 ```powershell
-python main.py --slitID 112 --crop_plan ./slit_112_crops.json --spec_width 40 --spec_height 40
+python main.py --slitID 112 --crop_plan ./slit_112_crops.json
 ```
 
-上述宽高对应此方案的 40×40 切片；脚本默认高度为 20，若要保留 Notebook 中的尺寸，须显式指定。方案放在当前目录时必须传入 `--crop_plan`，否则脚本只查找输出目录。
+默认从 JSON 中每条谱线的 `requested_shape: [高度, 宽度]` 读取裁剪尺寸，并重放保存的边界，无需在命令行重复设置。不同谱线可以保留各自的尺寸。仅在有意改变尺寸时使用 `--spec_width` 或 `--spec_height`；只指定其中一个时，另一个仍使用该谱线保存的尺寸。
 
-如果不传 `--crop_plan`，默认查找输出目录的 `slit_007_crops.json`。包装 PKL 前，每条发射线都必须已在 Notebook 中审核并保存到方案文件；缺少文件或缺少任何一条线时直接报错。包装时只重放方案，不再拟合或交互。需要修改裁切时，重新运行 `manual_crop.ipynb` 并保存方案。若命令行指定新的裁切宽高，会围绕保存的最终线心重新计算固定尺寸边界。红移或波长与方案不符时会报错。
+如果不传 `--crop_plan`，默认查找当前工作目录中的 `slit_007_crops.json`（编号随 `--slitID` 改变）。包装 PKL 前，每条发射线都必须已在 Notebook 中审核并保存到方案文件；缺少文件或缺少任何一条线时直接报错。包装时只重放方案，不再拟合或交互。需要修改裁切时，重新运行 `manual_crop.ipynb` 并保存方案。若命令行指定新的裁切宽高，会围绕保存的最终线心重新计算固定尺寸边界。红移或波长与方案不符时会报错。
 
 越界像素的 flux 和方差填零，`coverage_mask` 与 `mask_base` 标记无效位置；波长网格在边缘按局部步长外推供绘图使用。连续谱、背景方差和线宽仅在真实覆盖的矩形区域估计，然后映射到固定尺寸数组。最终 pkl 在原有字段之外保存这两个 mask。
 

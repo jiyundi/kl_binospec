@@ -1,0 +1,47 @@
+Windows fatal exception: code 0xc06d007f
+
+Current thread 0x00000c24 (most recent call first):
+  File "D:\Miniconda3\envs\Spyder-env\lib\site-packages\astropy\coordinates\builtin_frames\icrs_fk5_transforms.py", line 22 in _icrs_to_fk5_matrix
+  File "D:\Miniconda3\envs\Spyder-env\lib\site-packages\astropy\coordinates\builtin_frames\icrs_fk5_transforms.py", line 29 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1078 in _handle_fromlist
+  File "D:\Miniconda3\envs\Spyder-env\lib\site-packages\astropy\coordinates\builtin_frames\__init__.py", line 57 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "D:\Miniconda3\envs\Spyder-env\lib\site-packages\astropy\coordinates\__init__.py", line 12 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "D:\Miniconda3\envs\Spyder-env\lib\site-packages\astropy\wcs\utils.py", line 9 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1078 in _handle_fromlist
+  File "D:\Miniconda3\envs\Spyder-env\lib\site-packages\astropy\wcs\__init__.py", line 27 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1078 in _handle_fromlist
+  File "D:\_RschArchives\RSCH3\kl_binospec\data_prep\meta_config.py", line 3 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "D:\_RschArchives\RSCH3\kl_binospec\data_prep\main.py", line 14 in <module>

@@ -7,10 +7,10 @@
       3729.875
     ],
     "initial_redshift": 0.823,
-    "corrected_redshift": 0.822168122685884,
+    "corrected_redshift": 0.8222488071040736,
     "requested_shape": [
-      40,
-      40
+      30,
+      30
     ],
     "coordinate_frame": "stacked/flipped full spectrum, numpy zero-based",
     "sets": {
@@ -91,36 +91,36 @@
           417
         ],
         "bounds": {
-          "UP": 4,
-          "DN": 44,
-          "LF": 14,
-          "RT": 54
+          "UP": 9,
+          "DN": 39,
+          "LF": 18,
+          "RT": 48
         },
         "lines": {
           "line1": {
-            "full_x": 379.46,
+            "full_x": 378.99,
             "full_y": 23.5,
-            "crop_x": 15.46,
-            "crop_y": 19.5
+            "crop_x": 10.99,
+            "crop_y": 14.5
           },
           "line2": {
-            "full_x": 388.08,
+            "full_x": 387.85,
             "full_y": 23.5,
-            "crop_x": 24.08,
-            "crop_y": 19.5
+            "crop_x": 19.85,
+            "crop_y": 14.5
           }
         },
         "fit_par": {
-          "Amp1": 26.57,
-          "Amp2": 33.03,
-          "dx1": 4.05,
-          "dx2": 4.05,
-          "dy": 2.26,
-          "PA": 0.3
+          "Amp1": 24.75,
+          "Amp2": 33.17,
+          "dx1": 4.19,
+          "dx2": 4.19,
+          "dy": 2.28,
+          "PA": 0.27
         },
         "click_rough_xy": [
-          36.54937069039687,
-          22.93164910186085
+          36.07923216853696,
+          23.36115242248551
         ]
       },
       "C": {
@@ -200,35 +200,35 @@
           417
         ],
         "bounds": {
-          "UP": 4,
-          "DN": 44,
-          "LF": 5,
-          "RT": 45
+          "UP": 9,
+          "DN": 39,
+          "LF": 12,
+          "RT": 42
         },
         "lines": {
           "line1": {
-            "full_x": 370.06,
-            "full_y": 24.27,
-            "crop_x": 15.06,
-            "crop_y": 20.27
+            "full_x": 373.74,
+            "full_y": 24.259999999999998,
+            "crop_x": 11.74,
+            "crop_y": 15.26
           },
           "line2": {
-            "full_x": 380.15,
-            "full_y": 24.27,
-            "crop_x": 25.15,
-            "crop_y": 20.27
+            "full_x": 380.14,
+            "full_y": 24.259999999999998,
+            "crop_x": 18.14,
+            "crop_y": 15.26
           }
         },
         "fit_par": {
           "Amp1": 9.67,
-          "Amp2": 57.58,
-          "dx1": 2.29,
-          "dx2": 2.29,
-          "dy": 6.04,
-          "PA": 1.57
+          "Amp2": 53.51,
+          "dx1": 6.54,
+          "dx2": 6.54,
+          "dy": 2.25,
+          "PA": 0.08
         },
         "click_rough_xy": [
-          26.676461731338918,
+          25.736184687619044,
           24.22015906373484
         ]
       },
@@ -309,36 +309,36 @@
           417
         ],
         "bounds": {
-          "UP": 4,
-          "DN": 44,
-          "LF": 6,
-          "RT": 46
+          "UP": 10,
+          "DN": 40,
+          "LF": 11,
+          "RT": 41
         },
         "lines": {
           "line1": {
-            "full_x": 371.84,
-            "full_y": 24.5,
-            "crop_x": 15.84,
-            "crop_y": 20.5
+            "full_x": 371.81,
+            "full_y": 24.68,
+            "crop_x": 10.81,
+            "crop_y": 14.68
           },
           "line2": {
-            "full_x": 380.19,
-            "full_y": 24.5,
-            "crop_x": 24.19,
-            "crop_y": 20.5
+            "full_x": 380.16,
+            "full_y": 24.68,
+            "crop_x": 19.16,
+            "crop_y": 14.68
           }
         },
         "fit_par": {
-          "Amp1": 85.43,
-          "Amp2": 131.95,
+          "Amp1": 86.23,
+          "Amp2": 133.32,
           "dx1": 2.14,
           "dx2": 2.14,
-          "dy": 2.39,
+          "dy": 2.36,
           "PA": -0.69
         },
         "click_rough_xy": [
-          25.26604616575915,
-          24.22015906373484
+          25.266046165759207,
+          24.6496623843595
         ]
       }
     }
@@ -352,8 +352,8 @@
     "initial_redshift": 0.823,
     "corrected_redshift": 0.8223312148246359,
     "requested_shape": [
-      40,
-      40
+      30,
+      30
     ],
     "coordinate_frame": "stacked/flipped full spectrum, numpy zero-based",
     "sets": {
@@ -434,17 +434,17 @@
           4180
         ],
         "bounds": {
-          "UP": 4,
-          "DN": 44,
-          "LF": 14,
-          "RT": 54
+          "UP": 9,
+          "DN": 39,
+          "LF": 19,
+          "RT": 49
         },
         "lines": {
           "line1": {
             "full_x": 4147.19,
             "full_y": 23.84,
-            "crop_x": 20.19,
-            "crop_y": 19.84
+            "crop_x": 15.19,
+            "crop_y": 14.84
           }
         },
         "fit_par": {
@@ -532,17 +532,17 @@
           4180
         ],
         "bounds": {
-          "UP": 4,
-          "DN": 44,
-          "LF": 5,
-          "RT": 45
+          "UP": 9,
+          "DN": 39,
+          "LF": 10,
+          "RT": 40
         },
         "lines": {
           "line1": {
             "full_x": 4138.47,
             "full_y": 24.17,
-            "crop_x": 20.47,
-            "crop_y": 20.17
+            "crop_x": 15.47,
+            "crop_y": 15.17
           }
         },
         "fit_par": {
@@ -630,17 +630,17 @@
           4180
         ],
         "bounds": {
-          "UP": 4,
-          "DN": 44,
-          "LF": 4,
-          "RT": 44
+          "UP": 9,
+          "DN": 39,
+          "LF": 9,
+          "RT": 39
         },
         "lines": {
           "line1": {
             "full_x": 4136.72,
             "full_y": 24.48,
-            "crop_x": 19.72,
-            "crop_y": 20.48
+            "crop_x": 14.72,
+            "crop_y": 15.48
           }
         },
         "fit_par": {

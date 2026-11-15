@@ -15,10 +15,14 @@ from .read_and_cutout import read_spec2d, stack_spec2d
 
 
 LINE_WAVES = {
-    'O2': [3727.092, 3729.875],
-    'Ha': [6564.608], 'Hb': [4862.683], 'Hg': [4341.684],
-    'O3a': [4960.295], 'O3b': [5008.240],
-    'N2a': [6549.86], 'N2b': [6585.27],
+    'O2':  [3727.092, 3729.875],
+    'Ha':  [6564.608], 
+    'Hb':  [4862.683], 
+    'Hg':  [4341.684],
+    'O3a': [4960.295], 
+    'O3b': [5008.240],
+    'N2a': [6549.86], 
+    'N2b': [6585.27],
 }
 
 
@@ -33,7 +37,7 @@ def load_slit_lines(slit_num, table_path):
     table = pd.read_excel(table_path, header=None, engine='openpyxl').to_numpy()[1:]
     redshift = table[slit_num, 1]
     if pd.isna(redshift):
-        print(f'Stop: no secure redshift found for Slit {slit_num}.')
+        print(f'Skipped: no secure redshift found for Slit {slit_num}.')
         return None, {}
     names = set()
     for column in (6, 9, 12):
@@ -44,7 +48,7 @@ def load_slit_lines(slit_num, table_path):
     if pd.notna(excluded):
         names.difference_update(name.strip() for name in excluded.split(','))
     if not names:
-        print(f'Stop: no lines provided for cutting for Slit {slit_num}.')
+        print(f'Skipped: no lines provided for cutting for Slit {slit_num}.')
         return None, {}
     lines = {name: list(LINE_WAVES[name]) for name in names}
     return float(redshift), dict(sorted(lines.items(), key=lambda item: item[1][0]))
@@ -64,7 +68,7 @@ def review_slit(slit_num, paths, table_path, width=40, height=40, plan_path=None
     reviews = {}
     for name, waves in lines.items():
         review = NotebookCropReview(sources, name, waves, redshift,
-                                    width, height, plan_path)
+                                    width, height, plan_path, slit_num)
         reviews[name] = review
         review.show()
     return reviews
@@ -97,7 +101,8 @@ class NotebookCropReview:
     """One line at a time. Call show() in an ipympl-enabled notebook."""
 
     def __init__(self, sources, name, line_waves, redshift,
-                 width, height, plan_path):
+                 width, height, plan_path, slit_num):
+        self.slit_num = slit_num
         self.sources = [sources.specA, sources.specC, sources.specB]
         self.name = name
         self.line_waves = list(line_waves)
@@ -138,6 +143,26 @@ class NotebookCropReview:
                 1, 3, figsize=(6, 2), layout='constrained')
         positions = []
         rectangles = []
+        wavelength_labels = []
+
+        def update_wavelength(index):
+            x_input, y_input = positions[index]
+            x, y = x_input.value, y_input.value
+            wave = self.cuts[index]['wave']
+            if (not np.isfinite(x) or not np.isfinite(y) or
+                    not 0 <= x <= wave.shape[1] - 1 or
+                    not 0 <= y <= wave.shape[0] - 1):
+                wavelength_labels[index].value = 'Observed λ: — Å (outside image)'
+                return
+            x0, y0 = int(np.floor(x)), int(np.floor(y))
+            x1 = min(x0 + 1, wave.shape[1] - 1)
+            y1 = min(y0 + 1, wave.shape[0] - 1)
+            # Interpolate along both axes in case wavelength varies by row.
+            lower = np.interp(x, [x0, x1], wave[y0, [x0, x1]])
+            upper = np.interp(x, [x0, x1], wave[y1, [x0, x1]])
+            wavelength = np.interp(y, [y0, y1], [lower, upper])
+            wavelength_labels[index].value = f'Observed λ: {wavelength:.3f} Å'
+
         for i, (ax, cut) in enumerate(zip(axes, self.cuts)):
             flux = np.where(cut['mask'], cut['flux'], np.nan)
             sigma = np.nanstd(flux)
@@ -154,6 +179,8 @@ class NotebookCropReview:
             x_input = widgets.FloatText(value=float(x), description=f'{SETS[i]} x')
             y_input = widgets.FloatText(value=float(y), description=f'{SETS[i]} y')
             positions.append((x_input, y_input))
+            wavelength_labels.append(widgets.Label())
+            update_wavelength(i)
             box = Rectangle((x - self.width / 2, y - self.height / 2),
                             self.width, self.height,
                             fill=False, edgecolor='red', linewidth=1.5)
@@ -167,6 +194,7 @@ class NotebookCropReview:
                 xx, yy = positions[index]
                 rectangles[index].set_xy((xx.value - self.width / 2,
                                           yy.value - self.height / 2))
+                update_wavelength(index)
                 fig.canvas.draw_idle()
             x_input.observe(update, names='value')
             y_input.observe(update, names='value')
@@ -238,12 +266,24 @@ class NotebookCropReview:
                     print(f'Fit/save failed: {exc}')
         refit.on_click(fit_and_save)
 
-        display(widgets.HTML('<b>Select centers (rough spectrum)</b>'))
+        display(widgets.HTML(
+            '<h1> Crop for '+f'{self.name}, Slit {self.slit_num}'+'</h1>'+
+            '<h2> [Action needed] Please </h2>'+
+            '<ul>'+
+            '<li> Click "Accept automatic fit", OR</li>'+
+            '<li> Click to <b>locate the emission line center</b> in every spectrum stamps and click <b>"Refit from selected"</b></li>'+
+            '</ul>'
+        ))
         display(fig.canvas)
-        display(widgets.VBox([widgets.HBox(pair) for pair in positions]))
+        display(widgets.VBox([
+            widgets.HBox([*pair, wavelength_labels[i]])
+            for i, pair in enumerate(positions)
+        ]))
         display(widgets.HBox([accept_auto, refit]), output)
-        display(widgets.HTML('<b>Fitted crop preview (red +: fitted centers)</b>'))
+        display(widgets.HTML('You should see print-outs above: "Saved fitted crop for line_name to <b>file_name.json</b>"'))
+        display(widgets.HTML('<h2> Results: Crop preview</h2>'))
         display(preview.canvas)
+        display(widgets.HTML('Crop for '+f'{self.name}'+' finished.<hr>'))
         if self.auto_result is None:
             with output:
                 print('Automatic fit unavailable:', self.auto_error)

@@ -45,16 +45,18 @@ _all_emilines_supported = {
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
-    parser.add_argument('--slitID', default=7, type=int)
-    parser.add_argument('--spec_width',  default=30, type=int)
-    parser.add_argument('--spec_height', default=30, type=int)
+    parser.add_argument('--slitID', default=3, type=int)
+    parser.add_argument('--spec_width', default=None, type=int,
+                        help='Override saved crop width; defaults to each line crop plan')
+    parser.add_argument('--spec_height', default=None, type=int,
+                        help='Override saved crop height; defaults to each line crop plan')
     parser.add_argument('--img_width',   default=40, type=int)
     parser.add_argument('--img_height',  default=40, type=int)
     parser.add_argument('--clear_mode',  default='simple', type=str)
     parser.add_argument('--cont_scale',  default=[1.], type=int, nargs='+')
     parser.add_argument('--cont_y0s',    default=[10], type=int, nargs='+')
-    parser.add_argument('--crop_plan',   default='None',
-                        help='JSON crop plans; defaults to the output folder')
+    parser.add_argument('--crop_plan', default=None,
+                        help='JSON crop plans; defaults to slit_NNN_crops.json in the current directory')
     args = parser.parse_args()
     slit_num    = args.slitID
     spec_width  = args.spec_width
@@ -117,7 +119,7 @@ if __name__ == '__main__':
         import sys; sys.exit(0)
     
     # 4. REQUIRE SAVED MANUAL CROP PLANS FOR EVERY LINE
-    plan_path = args.crop_plan if args.crop_plan is None else f'slit_{slit_num:03d}_crops.json'
+    plan_path = args.crop_plan if args.crop_plan is not None else f'slit_{slit_num:03d}_crops.json'
     saved_plans = read_plans(plan_path)
     missing = sorted(set(emilines) - set(saved_plans))
     if missing:
