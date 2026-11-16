@@ -63,7 +63,8 @@ def review_slit(slit_num, paths, table_path, width=40, height=40, plan_path=None
     if not lines:
         return {}
     if plan_path is None:
-        plan_path = Path(f'slit_{slit_num:03d}_crops.json')
+        plan_path = (Path(__file__).resolve().parents[1] / 'spec_crop_plans' /
+                     f'slit_{slit_num:03d}_crops.json')
     sources = load_sources(paths)
     reviews = {}
     for name, waves in lines.items():

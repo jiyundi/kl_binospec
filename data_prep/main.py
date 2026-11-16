@@ -13,7 +13,7 @@ from   dataclasses import asdict
 from plot           import make_exam_plots
 from meta_config    import meta_spec_ABC, meta_image
 from data_structure import RealDataInfo, ImageData
-from image.masking         import mask_neighbor_star, find_mask_pars
+from image.masking         import mask_neighbor_star, read_mask_plan, target_pixel
 from image.rescale_var     import rescale_var
 from image.read_and_cutout import read_subaru_img_wcs, cutoutimg
 from spec.line_pipeline    import process_single_line
@@ -56,7 +56,9 @@ if __name__ == '__main__':
     parser.add_argument('--cont_scale',  default=[1.], type=int, nargs='+')
     parser.add_argument('--cont_y0s',    default=[10], type=int, nargs='+')
     parser.add_argument('--crop_plan', default=None,
-                        help='JSON crop plans; defaults to slit_NNN_crops.json in the current directory')
+                        help='JSON crop plans; defaults to spec_crop_plans/slit_NNN_crops.json')
+    parser.add_argument('--image_mask_plan', default=None,
+                        help='JSON image mask plan; defaults to image_mask_plans/slit_NNN_image_masks.json')
     args = parser.parse_args()
     slit_num    = args.slitID
     spec_width  = args.spec_width
@@ -90,7 +92,7 @@ if __name__ == '__main__':
     bltable = array[1:, [0,14]]
     z_spec  = ztable[slit_num, 1]
     if np.isnan(z_spec) == True: 
-        print(f'No secure redshift found. Skipped this Slit {slit_num}.')
+        print(f'No secure redshift found. Skipped this Slit {slit_num}. ✅\n')
         import sys; sys.exit(0)
     
     # 3. CHECK IF EMISSION LINES ARE DESIGNATED
@@ -115,15 +117,21 @@ if __name__ == '__main__':
     
     # 3.4) stop if all lines are rejected by user
     if len(emilines) == 0: 
-        print('Process stopped because no line provided for cutting.')
+        print('Process stopped because no line provided for cutting. ✅\n')
         import sys; sys.exit(0)
     
     # 4. REQUIRE SAVED MANUAL CROP PLANS FOR EVERY LINE
-    plan_path = args.crop_plan if args.crop_plan is not None else f'slit_{slit_num:03d}_crops.json'
+    prep_dir = os.path.dirname(os.path.abspath(__file__))
+    plan_path = (args.crop_plan if args.crop_plan is not None else
+                 os.path.join(prep_dir, 'spec_crop_plans', f'slit_{slit_num:03d}_crops.json'))
     saved_plans = read_plans(plan_path)
     missing = sorted(set(emilines) - set(saved_plans))
     if missing:
         raise ValueError(f'Manual crop plan {plan_path} is missing lines: {missing}')
+    mask_path = (args.image_mask_plan if args.image_mask_plan is not None
+                 else os.path.join(prep_dir, 'image_mask_plans',
+                                   f'slit_{slit_num:03d}_image_masks.json'))
+    ellipses = read_mask_plan(mask_path, slit_num)
     os.makedirs(real_pkl_folder+'pkl/', exist_ok=True)
     
     # 5. META INFORMATION 
@@ -168,8 +176,9 @@ if __name__ == '__main__':
     weights_wcs  = imaging_data['weights_wcs' ]
     
     # 6.2) Cutout image to 4'' x 4'' size
-    image_data, RAlim, DEClim = cutoutimg(
-        science_data, science_wcs, objRA, objDEC, img_width, img_height
+    image_data, RAlim, DEClim, image_wcs = cutoutimg(
+        science_data, science_wcs, objRA, objDEC, img_width, img_height,
+        outputWCS=True
         )
     image_ivar, RAlim, DEClim = cutoutimg(
         weights_data, weights_wcs, objRA, objDEC, img_width, img_height
@@ -178,13 +187,10 @@ if __name__ == '__main__':
     empty_mask    = np.ones(image_data.shape, dtype=bool)
     
     # 6.3) Mask out nearby galaxies and stars
-    kws = find_mask_pars(slit_num)
-    if kws is not None:
-        image_mask = mask_neighbor_star(
-            image_data, empty_mask, *kws
-            )
-    else:
-        image_mask = empty_mask
+    image_mask = mask_neighbor_star(
+        image_data, empty_mask, ellipses,
+        target_pixel(image_wcs, objRA, objDEC)
+    )
     
     # 6.4) Rescale: ESTIMATE A REASONABLE LEVEL OF IMAGE VARIANCE
     image_var = rescale_var(image_data, image_var_raw, image_mask)

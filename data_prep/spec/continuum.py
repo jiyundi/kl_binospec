@@ -58,45 +58,45 @@ def extract_2d_continuum(flux, mask,
         # build 2D continuum model
         model = P * cont[:,np.newaxis].T * cont_scale
             
-    vmin, vmax = np.nanmin(arr_flux), np.nanmax(arr_flux)
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(1, 4, figsize=(9,3))
-    im0 = ax[0].imshow(arr_flux, aspect='auto', cmap='viridis', origin='lower')
-    im1 = ax[1].imshow(model,    aspect='auto', cmap='viridis', origin='lower')
-    temp_mask = np.ones(model.shape, dtype=bool)
-    temp_mask[5:-5] = False
-    im2 = ax[2].imshow(np.where(temp_mask, arr_flux-model, np.nan), 
-                       aspect='auto', cmap='viridis', origin='lower',
-                       )
-    im3 = ax[3].imshow(arr_flux-model, 
-                       aspect='auto', cmap='viridis', origin='lower',
-                       vmin=vmin, vmax=vmax
-                       )
-    plt.colorbar(im0, ax=ax[0])
-    plt.colorbar(im1, ax=ax[1])
-    plt.colorbar(im2, ax=ax[2])
-    plt.colorbar(im3, ax=ax[3])
-    ax[0].set_title('Data')
-    ax[1].set_title(f'Continuum (mode: {mode})')
-    ax[2].set_title('Edge residuals (10 rows)')
-    ax[3].set_title('Data - Continuum')
-    # print(f'Continuum.py: Top 5 rows sum: {np.nansum(arr_flux[-5:]-model[-5:]):.1f}')
-    # print(f'Continuum.py: Btm 5 rows sum: {np.nansum(arr_flux[ :5]-model[ :5]):.1f}')
-    if verbose:
-        plt.suptitle("Close window to continue...", fontsize=15, y=0.98)
-        plt.tight_layout()
-        plt.show()
-        plt.close()
-    else:
-        plt.suptitle("Window will close automatically in 3 seconds...", fontsize=15, y=0.98)
-        plt.tight_layout()
+    # vmin, vmax = np.nanmin(arr_flux), np.nanmax(arr_flux)
+    # import matplotlib.pyplot as plt
+    # fig, ax = plt.subplots(1, 4, figsize=(9,3))
+    # im0 = ax[0].imshow(arr_flux, aspect='auto', cmap='viridis', origin='lower')
+    # im1 = ax[1].imshow(model,    aspect='auto', cmap='viridis', origin='lower')
+    # temp_mask = np.ones(model.shape, dtype=bool)
+    # temp_mask[5:-5] = False
+    # im2 = ax[2].imshow(np.where(temp_mask, arr_flux-model, np.nan), 
+    #                    aspect='auto', cmap='viridis', origin='lower',
+    #                    )
+    # im3 = ax[3].imshow(arr_flux-model, 
+    #                    aspect='auto', cmap='viridis', origin='lower',
+    #                    vmin=vmin, vmax=vmax
+    #                    )
+    # plt.colorbar(im0, ax=ax[0])
+    # plt.colorbar(im1, ax=ax[1])
+    # plt.colorbar(im2, ax=ax[2])
+    # plt.colorbar(im3, ax=ax[3])
+    # ax[0].set_title('Data')
+    # ax[1].set_title(f'Continuum (mode: {mode})')
+    # ax[2].set_title('Edge residuals (10 rows)')
+    # ax[3].set_title('Data - Continuum')
+    # # print(f'Continuum.py: Top 5 rows sum: {np.nansum(arr_flux[-5:]-model[-5:]):.1f}')
+    # # print(f'Continuum.py: Btm 5 rows sum: {np.nansum(arr_flux[ :5]-model[ :5]):.1f}')
+    # if verbose:
+    #     plt.suptitle("Close window to continue...", fontsize=15, y=0.98)
+    #     plt.tight_layout()
+    #     plt.show()
+    #     plt.close()
+    # else:
+    #     plt.suptitle("Window will close automatically in 3 seconds...", fontsize=15, y=0.98)
+    #     plt.tight_layout()
         
-        timer = fig.canvas.new_timer(interval=3000) 
-        timer.add_callback(plt.close, fig)
-        timer.start()
+    #     timer = fig.canvas.new_timer(interval=3000) 
+    #     timer.add_callback(plt.close, fig)
+    #     timer.start()
         
-        plt.show()
-        plt.close()
+    #     plt.show()
+    #     plt.close()
 
     return model
 

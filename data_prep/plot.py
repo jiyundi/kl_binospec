@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 
 from core.find_snr  import snr_estimate
 
@@ -47,6 +48,9 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
                           width_ratios=[1]*n_lines + [1.2])
     
     colors = ['orangered', 'cyan', 'gold']
+    text_style = dict(color='white',
+                      path_effects=[pe.withStroke(linewidth=5,
+                                                  foreground='#202020')])
     sets_slitRA  = []
     sets_slitDec = []
     
@@ -91,13 +95,13 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
                 ax1.text(0.98, 0.02, 
                          f'Size {spec_data.shape}\n'+
                          f'Row of center in raw: {(UP+DN)/2:.1f}', 
-                         fontsize=10, color='orangered', ha='right', va='bottom', 
+                         fontsize=14, ha='right', va='bottom', **text_style,
                          transform=ax1.transAxes)
                 
             else:
                 ax1.text(0.98, 0.02, 
                          f'Size {spec_data.shape}', 
-                         fontsize=10, color='orangered', ha='right', va='bottom', 
+                         fontsize=14, ha='right', va='bottom', **text_style,
                          transform=ax1.transAxes)
             
             spec_snr = snr_estimate(
@@ -108,7 +112,7 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
             ax1.text(
                 0.98, 0.98, 
                 f'SNR={spec_snr:.1f}', 
-                fontsize=10, color='orangered', ha='right', va='top', 
+                fontsize=14, ha='right', va='top', **text_style,
                 transform=ax1.transAxes
             )
             sets_slitRA.append(slitRA)
@@ -146,11 +150,11 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
                                "image")
         ax2.text(0.98, 0.98, 
                  f'SNR = {imageSNR:.0f}',
-                 fontsize=10, color='orangered', ha='right', va='top', 
+                 fontsize=14, ha='right', va='top', **text_style,
                  transform=ax2.transAxes)
         ax2.text(0.98, 0.02, 
                  f'Size {image_data.shape}', 
-                 fontsize=10, color='orangered', ha='right', va='bottom', 
+                 fontsize=14, ha='right', va='bottom', **text_style,
                  transform=ax2.transAxes)
         ax2.coords['ra' ].set_major_formatter('dd:mm:ss')
         ax2.coords['dec'].set_major_formatter('dd:mm:ss')
