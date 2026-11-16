@@ -72,6 +72,23 @@ def bad_pixel_mask(image, window_size=5, k1=6):
     return overexposed # mask whose True == bad pixels
 
 
+def mask_negative_outliers(flux, mask, total_variance, floor=-20.0, nsigma=5.0):
+    """Keep valid pixels except extreme negative counts (below floor AND -nsigma).
+
+    Apply to pipeline counts before continuum/background subtraction. True
+    means usable, following the spectrum mask convention. The absolute floor
+    is in the same count units as flux; sigma comes from pipeline variance.
+    """
+    flux = np.asarray(flux)
+    total = np.asarray(total_variance)
+    if flux.shape != mask.shape or flux.shape != total.shape:
+        raise ValueError('Flux, mask and total variance must have identical shapes')
+    valid = np.isfinite(flux) & np.isfinite(total) & (total > 0)
+    sigma = np.sqrt(np.where(valid, total, np.nan))
+    outlier = (flux < floor) & (flux < -nsigma * sigma)
+    return mask & valid & ~outlier
+
+
 if __name__ == '__main__':
     import joblib
     pkl_folder     = '../../scripts/binospec_pkl/'

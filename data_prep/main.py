@@ -45,7 +45,7 @@ _all_emilines_supported = {
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
-    parser.add_argument('--slitID', default=3, type=int)
+    parser.add_argument('--slitID', default=91, type=int)
     parser.add_argument('--spec_width', default=None, type=int,
                         help='Override saved crop width; defaults to each line crop plan')
     parser.add_argument('--spec_height', default=None, type=int,
@@ -303,12 +303,16 @@ if __name__ == '__main__':
                      names=["slit", "median", "std", "err_lo", "mean", "err_hi"])
     dg = dg.drop_duplicates(subset="slit", keep="last")
     Ms = dg.sort_values(by='slit').to_numpy()
+    log10_Mstar, log10_Mstar_err = None, None
     for row in Ms:
         if row[0] == slit_num:
             log10_Mstar     = row[1]
             log10_Mstar_err = row[2]
             print(f'Updated: log10_Mstar = {log10_Mstar}, err = {log10_Mstar_err}')
             break
+    if log10_Mstar_err is None: 
+        print('Process stopped because no stellar mass for this slit. ✅\n')
+        import sys; sys.exit(0)
     
     # 8.2) From spec cutouts, take an average of precise redshifts
     redo_z = np.mean(redo_zs)

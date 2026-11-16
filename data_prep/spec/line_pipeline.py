@@ -6,6 +6,7 @@ from  data_structure import SpecData
 from .build_var      import from_total_variance, build_var
 from .continuum      import extract_2d_continuum
 from .crop_plan      import replay_plan
+from .masking        import mask_negative_outliers
 
 from core.find_bkg import bkg_estimate
 from core.find_snr import snr_estimate
@@ -45,7 +46,12 @@ def process_single_line(specs, lineinfo, meta_raws,
         x0, x1 = int(cols.min()), int(cols.max()) + 1
         inner = np.s_[y0:y1, x0:x1]
         valid_flux = cropped['flux'][inner]
-        base_mask = cropped['mask'][inner]
+        base_mask = mask_negative_outliers(
+            valid_flux, 
+            cropped['mask'][inner], 
+            cropped['var_total'][inner], 
+            floor=-20.0, nsigma=3
+        )
 
         cont = extract_2d_continuum(
             valid_flux, base_mask,
@@ -80,8 +86,8 @@ def process_single_line(specs, lineinfo, meta_raws,
         D = D' + dB = D' - bkg_estimate(D')
         """
         try: 
-            bkg_est = bkg_estimate(spec_after_cont)[0]
-            print(f'Estimated bkg = {bkg_est:.1f}')
+            bkg_est = bkg_estimate(np.where(final_mask, spec_after_cont, np.nan))[0]
+            # print(f'Estimated bkg = {bkg_est:.1f}')
         except AssertionError: 
             print('No significant emission structure was detected. Set bkg to 0.')
             bkg_est = 0

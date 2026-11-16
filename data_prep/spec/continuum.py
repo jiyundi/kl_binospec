@@ -25,6 +25,12 @@ def extract_2d_continuum(flux, mask,
             print("\033[43m" + 'WARNING:' + "\033[0m " + 
                   f'Continuum extraction band may be too small (left/right {margin} px) to fail.')
         
+        # Fully masked edge rows must not spread NaNs through the smoothing.
+        good_rows = np.isfinite(spatial_profi)
+        if not np.any(good_rows):
+            return np.full(flux.shape, np.nan)
+        rows = np.arange(ny)
+        spatial_profi = np.interp(rows, rows[good_rows], spatial_profi[good_rows])
         spatial_profi = gaussian_filter1d(spatial_profi, sigma=2)
         spatial_profi -= np.min(spatial_profi)
         # spatial_profi = np.where(spatial_profi>0, spatial_profi, 0)

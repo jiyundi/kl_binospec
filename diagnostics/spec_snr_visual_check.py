@@ -2,8 +2,10 @@ import math
 import joblib
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 
-from spec_snr_estimate import bkg_estimate
+from core.find_snr import snr_estimate
 
 def plot_2d_spectra_grid(
     records,
@@ -11,12 +13,12 @@ def plot_2d_spectra_grid(
     output_file,
     cmap_name="viridis",
     ncols=None,
-    max_figsize=30,
-    panel_width=2.4,
-    panel_height=1.8,
+    max_figsize=None,
+    panel_width=1.0,
+    panel_height=1.0,
     percentile_limits=(1, 99),
     dpi=150,
-    show_figure=True,
+    show_figure=False,
 ):
     """
     将二维光谱绘制成多子图网格。
@@ -33,8 +35,13 @@ def plot_2d_spectra_grid(
         imshow 使用的颜色表。
     ncols : int or None
         每行子图数量。None 时自动计算。
-    max_figsize : float
-        图像宽、高的最大英寸数。
+    max_figsize : float or None
+        图像宽、高的最大英寸数。默认 None，不限制画布尺寸，
+        按 panel_width、panel_height 和网格行列数增长。
+    panel_width, panel_height : float
+        每个小图（含标题和间距）分配的宽、高，单位为英寸。
+    show_figure : bool
+        默认 False，仅保存图片，不创建交互窗口。
     percentile_limits : tuple
         每幅光谱计算 vmin、vmax 时使用的百分位数。
     dpi : int
@@ -57,22 +64,24 @@ def plot_2d_spectra_grid(
     ncols = min(ncols, n_spectra)
     nrows = math.ceil(n_spectra / ncols)
 
-    fig_width = min(
-        max_figsize,
-        max(6, ncols * panel_width)
-    )
-    fig_height = min(
-        max_figsize,
-        max(4, nrows * panel_height)
-    )
+    fig_width = max(6, ncols * panel_width)
+    fig_height = max(4, nrows * panel_height + 0.4)
+    if max_figsize is not None:
+        fig_width = min(max_figsize, fig_width)
+        fig_height = min(max_figsize, fig_height)
 
-    fig, axes = plt.subplots(
-        nrows,
-        ncols,
+    figure_options = dict(
         figsize=(fig_width, fig_height),
-        squeeze=False,
         facecolor="white",
+        layout="constrained",
     )
+    if show_figure:
+        fig, axes = plt.subplots(nrows, ncols, squeeze=False, **figure_options)
+    else:
+        # 独立的 Agg 画布保证保存时不弹窗，也不修改其他脚本的全局后端。
+        fig = Figure(**figure_options)
+        FigureCanvasAgg(fig)
+        axes = fig.subplots(nrows, ncols, squeeze=False)
 
     axes = axes.ravel()
 
@@ -122,27 +131,18 @@ def plot_2d_spectra_grid(
             vmax=vmax,
         )
 
-        annotation = (
-            f"slit={record['slit_num']:03d}, "
-            f"spec={record['spec_idx']}\n"
-            f"SNR={record['spec_snr']:.3f}"
+        panel_title = (
+            f"{record['slit_num']}, {record['spec_idx']}: "
+            f"SNR={record['spec_snr']:.1f}"
         )
 
-        ax.text(
-            0.02,
-            0.98,
-            annotation,
-            transform=ax.transAxes,
+        ax.set_title(
+            panel_title,
             ha="left",
-            va="top",
+            loc="left",
             fontsize=6,
             color="black",
-            bbox={
-                "facecolor": "white",
-                "edgecolor": "none",
-                "alpha": 0.75,
-                "pad": 1.0,
-            },
+            pad=3,
         )
 
         # 小图很多时关闭刻度，使画面更清楚
@@ -177,17 +177,7 @@ def plot_2d_spectra_grid(
 
     fig.suptitle(
         f"{title}  (N={n_spectra})",
-        fontsize=15,
-        y=0.995,
-    )
-
-    fig.subplots_adjust(
-        left=0.015,
-        right=0.995,
-        bottom=0.015,
-        top=0.98,
-        wspace=0.08,
-        hspace=0.15,
+        fontsize=12,
     )
 
     fig.savefig(
@@ -210,6 +200,13 @@ def plot_2d_spectra_grid(
     )
     
 
+
+
+
+
+
+
+
 if __name__ == "__main__":
     
     # --------------------------------------------------
@@ -219,7 +216,7 @@ if __name__ == "__main__":
 
     for slit_num in range(143):
         filepath = (
-            f"../scripts/binospec_pkl/pkl/"
+            f"../scripts/binospec_pkl_new/pkl/"
             f"slit_{slit_num:03d}.pkl"
         )
 
@@ -231,31 +228,19 @@ if __name__ == "__main__":
             continue
 
         for spec_idx, spec in enumerate(data_info["spec"]):
-            pkl_flux = np.asarray(spec["data"]).squeeze()
-            pkl_bkg_var = np.asarray(spec["var"]).squeeze()
+            flux = np.asarray(spec["data"])
+            var  = np.asarray(spec["var"])
+            mask = np.asarray(spec["mask"], dtype=bool)
 
-            # 如果你的 mask 在其他位置，请修改这一行
-            mask = np.asarray(spec["mask"], dtype=bool).squeeze()
-
-            if pkl_flux.shape != mask.shape:
-                print(
-                    f"跳过 slit={slit_num}, spec={spec_idx}："
-                    f"flux shape={pkl_flux.shape}, "
-                    f"mask shape={mask.shape}"
-                )
-                continue
-
-            background = bkg_estimate(pkl_flux[mask])[0]
-
-            spec_snr = (
-                np.nansum(pkl_flux[mask] - background)
-                / np.sqrt(np.nansum((pkl_flux[mask] - background) + pkl_bkg_var[mask]))
+            spec_snr = snr_estimate(
+                np.where(mask, flux, np.nan),
+                bkg_is_subtracted=False, 
+                # restore_CCD_flux=True,
+                var_given=var
             )
-            
-            spec_snr = float(np.asarray(spec_snr).squeeze())
 
             # mask=False 的位置设置成 NaN，画图时会显示为空白
-            masked_flux = np.where(mask, pkl_flux, np.nan)
+            masked_flux = np.where(mask, flux, np.nan)
 
             spectra_records.append({
                 "slit_num": slit_num,
@@ -313,7 +298,7 @@ if __name__ == "__main__":
         positive_spectra,
         title="2D Spectra with SNR >= 0",
         output_file="spectra_2d_positive_snr.png",
-        max_figsize=20,
+        ncols=20,
         dpi=100,
     )
 
@@ -321,6 +306,5 @@ if __name__ == "__main__":
         negative_spectra,
         title="2D Spectra with SNR < 0",
         output_file="spectra_2d_negative_snr.png",
-        max_figsize=20,
         dpi=100,
     )

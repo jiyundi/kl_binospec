@@ -33,7 +33,10 @@ def snr_estimate(
 
     else: # bkg_is_subtracted, common for Binospec data
         if mock_bkg is None:
-            background_level = bkg_estimate(image)[0]
+            try:
+                background_level = bkg_estimate(image)[0]
+            except AssertionError:
+                background_level = 0
         else:
             background_level = mock_bkg
         
@@ -42,16 +45,16 @@ def snr_estimate(
         else: 
             data = image
 
-        var_poisson = image - background_level # must be restored the original CCD counts
+        if var_given is not None: # common for Binospec data
+            var = var_given
+
+        else:
+            var_poisson = image - background_level # must be restored the original CCD counts
             
-        if data_is_noisy == False: # simulated/modelled images
-            var = var_poisson
+            if data_is_noisy == False: # simulated/modelled images
+                var = var_poisson
 
-        else: # data noisy, common for Binospec data
-            if var_given is not None: # common for Binospec data
-                var = var_given
-
-            else:
+            else: # data noisy, common for Binospec data
                 if noise_var == 0:
                     raise TypeError(
                         f'Noise variance is required since you specified data is noisy.'
