@@ -6,21 +6,19 @@
 
 ## 用户最后分享的代码
 ```powershell
-foreach ($i in 6..10) {
-    $cropPlan = "slit_{0:D3}_crops.json" -f $i
-    python main.py --slitID $i --crop_plan $cropPlan
+$failedSlits = @()
+
+foreach ($i in 1..20) {
+    python main.py --slitID $i
 
     if ($LASTEXITCODE -ne 0) {
         $failedSlits += $i
         Write-Warning "slitID=$i 执行失败，跳过"
-        continue
     }
 }
 
-# 每行一个失败号码；没有失败时写入空文件
 Set-Content -Path "failed_slits.txt" -Value $failedSlits -Encoding utf8
-
-Write-Host "运行结束，共失败 $($failedSlits.Count) 个，已保存到 failed_slits.txt"
+Write-Host "运行结束，共失败 $($failedSlits.Count) 个"
 ```
 - 此段原样保留。此前提供的完整版在循环前有 `$failedSlits = @()`；用户最后片段省略了初始化。独立重跑时应初始化，以免沿用旧值或受变量类型影响。
 - `failed_slits.txt` 只保存失败号码，每行一个，覆盖旧文件；不是完整 stdout/stderr 日志。运行目录应为 `data_prep`。
