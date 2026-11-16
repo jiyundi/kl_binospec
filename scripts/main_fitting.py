@@ -47,8 +47,8 @@ from core.find_post_mode import weighted_kde_mode
 from core.find_post_median import weighted_median
 
 from klm.line_profile_extraction import (
-    exam_line_profile_A,
-    extract_asymmetric_lpf_A,
+    fit_asymmetric_line_profiles,
+    plot_lpf_diagnostics,
 )
 from klm.nautilus_sampler import NautilusSampler
 from klm.parameters import Parameters
@@ -82,7 +82,7 @@ plt.rcParams.update(
 # -----------------------------------------------------------------------
 
 parser = argparse.ArgumentParser(
-    description="Fit a mock Binospec slit observation."
+    description="Fit a real Binospec slit observation."
 )
 
 parser.add_argument(
@@ -90,8 +90,8 @@ parser.add_argument(
     "--slitID",
     dest="slit_id",
     type=int,
-    default=1,
-    help="Mock slit index. Default: 1",
+    default=109,
+    help="Real slit index. Default: 1",
 )
 
 parser.add_argument(
@@ -125,7 +125,7 @@ use_parallel = args.parallel
 # Paths: edit these directly when necessary
 # -----------------------------------------------------------------------
 
-pkl_folder = Path("binospec_pkl/pkl")
+pkl_folder = Path("binospec_pkl_new/pkl")
 use_what_line_proflie = "meta" #"analytic", 
 
 fiducial_yaml = Path(
@@ -147,7 +147,7 @@ diagnostic_folder.mkdir(parents=True, exist_ok=True)
 
 
 # -----------------------------------------------------------------------
-# 1. Load mock observation
+# 1. Load real observation
 # -----------------------------------------------------------------------
 
 print()
@@ -176,14 +176,73 @@ data_info['image']['meta']['wcs'] = galsim.AstropyWCS(wcs=ap_wcs)
 
 for spec_idx in range(len(data_info["spec"])):
 
+    print(f'Extracting/Plotting the line profile for spec_idx {spec_idx}...')
+    
     # Line profile extracted from the noisy spectrum.
-    amp, mean, sigma_left, sigma_right = extract_asymmetric_lpf_A(
+    amp, mean, sigma_left, sigma_right = fit_asymmetric_line_profiles(
         data_info["spec"][spec_idx]["data"],
         data_info["spec"][spec_idx]["meta"]["lambda_grid"],
         line=data_info["spec"][spec_idx]["meta"]["line_species"],
     )
 
-    exam_line_profile_A(
+    # First asymmetric Gaussian component.
+    amp_1 = amp[:, 0].copy()
+    mean_1 = mean[:, 0]
+    sigma_left_1 = sigma_left[:, 0]
+    sigma_right_1 = sigma_right[:, 0]
+
+    # Second asymmetric Gaussian component.
+    amp_2 = amp[:, 1].copy()
+    mean_2 = mean[:, 1]
+    sigma_left_2 = sigma_left[:, 1]
+    sigma_right_2 = sigma_right[:, 1]
+
+    # Normalize the amplitudes.
+    if np.any(np.isfinite(amp_1)):
+        maximum_amp_1 = np.nanmax(amp_1)
+
+        if maximum_amp_1 > 0:
+            amp_1 /= maximum_amp_1
+
+    if np.any(np.isfinite(amp_2)):
+        maximum_amp_2 = np.nanmax(amp_2)
+
+        if maximum_amp_2 > 0:
+            amp_2 /= maximum_amp_2
+
+    # Rows with invalid amplitudes are marked as unreliable.
+    reliability_mask = (
+        np.isfinite(amp_1)
+        & np.isfinite(amp_2)
+    )
+
+    amp_1[~reliability_mask] = 0.0
+    amp_2[~reliability_mask] = 0.0
+
+    line_profile_1 = {
+        "amp": amp_1,
+        "mean": mean_1,
+        "std_left": sigma_left_1,
+        "std_right": sigma_right_1,
+        "reliability": reliability_mask,
+        "bkg": np.zeros_like(amp_1),
+    }
+
+    line_profile_2 = {
+        "amp": amp_2,
+        "mean": mean_2,
+        "std_left": sigma_left_2,
+        "std_right": sigma_right_2,
+        "reliability": reliability_mask,
+        "bkg": np.zeros_like(amp_2),
+    }
+
+    data_info["spec"][spec_idx]["meta"]["line_profile"] = (
+        line_profile_1,
+        line_profile_2,
+    )
+
+    plot_lpf_diagnostics(
         (amp, mean, sigma_left, sigma_right),
         data_info["spec"][spec_idx]["data"],
         data_info["spec"][spec_idx]["mask"],
@@ -193,7 +252,7 @@ for spec_idx in range(len(data_info["spec"])):
             diagnostic_folder / f"LPF_slit{slit_id:03d}_line{spec_idx}.png"
         )
     )
-
+    
 
 # -----------------------------------------------------------------------
 # 2. Load the fitting configuration

@@ -333,8 +333,8 @@ class Config():
             TF_relation_str = '(log10_Mstar - a) / b'
             log10_vTF = eval(TF_relation_str)
             self.TFprior.sigmaTF = (sigmaTF_intr**2 + (log10_Mstar_err/b)**2)**0.5
-            print(f'Config.py: log10_vTF = {log10_vTF:.5f} (expect: 2.3404772917671366)')
-            print(f'Config.py: sigmaTF = {self.TFprior.sigmaTF:.5f} (expect: 0.0662413442842048)')
+            # print(f'Config.py: log10_vTF = {log10_vTF:.5f} (expect: 2.3404772917671366)')
+            # print(f'Config.py: sigmaTF = {self.TFprior.sigmaTF:.5f} (expect: 0.0662413442842048)')
 
         self.TFprior.a = a
         self.TFprior.b = b
