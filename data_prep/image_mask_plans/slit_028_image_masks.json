@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "slit_num": 28,
+  "ellipses": [
+    {
+      "offset_x": -11.85,
+      "offset_y": -15.47,
+      "radius_x": 8.0,
+      "radius_y": 8.0,
+      "angle_deg": 0.0
+    }
+  ]
+}
