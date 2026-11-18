@@ -87,12 +87,13 @@ def process_single_line(specs, lineinfo, meta_raws,
         D = D' + dB = D' - bkg_estimate(D')
         """
         try: 
-            bkg_est = bkg_estimate(np.where(spec_mask, spec_after_cont, np.nan))[0]
+            bkg_est, source_mask, bkg_1sigma, n_bkg = bkg_estimate(np.where(spec_mask, spec_after_cont, np.nan))
             # print(f'Estimated bkg = {bkg_est:.1f}')
         except AssertionError: 
             print('No significant emission structure was detected. Set bkg to 0.')
-            bkg_est = 0
-        spec_after_bkg_fixed = spec_after_cont - bkg_est
+            bkg_est, bkg_1sigma = 0, np.nanstd(np.where(spec_mask, spec_after_cont, np.nan))
+        spec_after_bkg_fixed = spec_after_cont - bkg_est # + bkg_1sigma
+        # spec_after_bkg_fixed = np.where(spec_after_bkg_fixed>=0, spec_after_bkg_fixed, 0)
 
         # 8.5) Rescale var
         # In practice, the raw Binospec var is over-estimated.
