@@ -46,9 +46,7 @@ from core.post_fitting import plot_obs_fit_res
 from core.find_post_mode import weighted_kde_mode
 from core.find_post_median import weighted_median
 
-from klm.line_profile_extraction import (
-    plot_lpf_diagnostics,
-)
+from klm.line_profile_extraction import plot_lpf_diagnostics
 from klm.nautilus_sampler import NautilusSampler
 from klm.parameters import Parameters
 
@@ -89,7 +87,7 @@ parser.add_argument(
     "--slitID",
     dest="slit_id",
     type=int,
-    default=109,
+    default=95,
     help="Real slit index. Default: 1",
 )
 
@@ -164,8 +162,12 @@ print("Current time:", time.ctime())
 
 data_info_path = pkl_folder / f"slit_{slit_id:03d}.pkl"
 
-with data_info_path.open("rb") as file:
-    data_info = joblib.load(file)
+try:
+    with data_info_path.open("rb") as file:
+        data_info = joblib.load(file)
+except FileNotFoundError:
+    print("\033[43mWARNING:\033[0m " + f"PKL file not found at {data_info_path}. Skipped.")
+    import sys; sys.exit(0)
 
 # Historic error: par_fit -> fid_params. Rename for clarity.
 if "par_fit" in data_info:
