@@ -7,8 +7,7 @@
 ## 用户最后分享的代码
 ```powershell
 $failedSlits = @()
-
-foreach ($i in 1..20) {
+foreach ($i in 1..142) {
     python main.py --slitID $i
 
     if ($LASTEXITCODE -ne 0) {
@@ -16,7 +15,6 @@ foreach ($i in 1..20) {
         Write-Warning "slitID=$i 执行失败，跳过"
     }
 }
-
 Set-Content -Path "failed_slits.txt" -Value $failedSlits -Encoding utf8
 Write-Host "运行结束，共失败 $($failedSlits.Count) 个"
 ```
