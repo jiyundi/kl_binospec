@@ -87,7 +87,7 @@ parser.add_argument(
     "--slitID",
     dest="slit_id",
     type=int,
-    default=95,
+    default=110,
     help="Real slit index. Default: 1",
 )
 
