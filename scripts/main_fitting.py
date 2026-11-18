@@ -4,7 +4,7 @@
 The script performs the following steps:
 
 1. Load data from dictionaries packed from observation.
-2. Extract asymmetric line profiles.
+2. Plot the stored asymmetric line profiles.
 3. Run the Nautilus sampler.
 4. Save posterior summaries.
 5. Plot the best-fitting model and posterior distributions.
@@ -47,7 +47,6 @@ from core.find_post_mode import weighted_kde_mode
 from core.find_post_median import weighted_median
 
 from klm.line_profile_extraction import (
-    fit_asymmetric_line_profiles,
     plot_lpf_diagnostics,
 )
 from klm.nautilus_sampler import NautilusSampler
@@ -113,6 +112,12 @@ parser.add_argument(
     help="Enable parallel sampling.",
 )
 
+parser.add_argument(
+    "--job-script",
+    type=Path,
+    help="Slurm script for walltime fallback; defaults to KL_JOB_SCRIPT.",
+)
+
 args = parser.parse_args()
 
 slit_id    = args.slit_id
@@ -171,76 +176,33 @@ ap_wcs  = data_info['image']['meta']['ap_wcs']
 data_info['image']['meta']['wcs'] = galsim.AstropyWCS(wcs=ap_wcs)
 
 # -----------------------------------------------------------------------
-# 1.1 Extract the asymmetric line profiles for all lines
+# 1.1 Plot the asymmetric line profiles stored in the PKL
 # -----------------------------------------------------------------------
 
 for spec_idx in range(len(data_info["spec"])):
 
-    print(f'Extracting/Plotting the line profile for spec_idx {spec_idx}...')
-    
-    # Line profile extracted from the noisy spectrum.
-    amp, mean, sigma_left, sigma_right = fit_asymmetric_line_profiles(
-        data_info["spec"][spec_idx]["data"],
-        data_info["spec"][spec_idx]["meta"]["lambda_grid"],
-        line=data_info["spec"][spec_idx]["meta"]["line_species"],
+    spectrum = data_info["spec"][spec_idx]
+    line_profile = spectrum["meta"]["line_profile"]
+    if (not isinstance(line_profile, (tuple, list))
+            or len(line_profile) != 2
+            or not all(isinstance(component, dict)
+                       and "amp_raw" in component
+                       for component in line_profile)):
+        raise ValueError(
+            f"Spectrum {spec_idx} has an old or incomplete line_profile in "
+            f"{data_info_path}; regenerate this PKL with data_prep/main.py."
+        )
+
+    amp = np.stack([component["amp_raw"] for component in line_profile], axis=1)
+    mean = np.stack([component["mean"] for component in line_profile], axis=1)
+    sigma_left = np.stack(
+        [component["std_left"] for component in line_profile], axis=1
+    )
+    sigma_right = np.stack(
+        [component["std_right"] for component in line_profile], axis=1
     )
 
-    # First asymmetric Gaussian component.
-    amp_1 = amp[:, 0].copy()
-    mean_1 = mean[:, 0]
-    sigma_left_1 = sigma_left[:, 0]
-    sigma_right_1 = sigma_right[:, 0]
-
-    # Second asymmetric Gaussian component.
-    amp_2 = amp[:, 1].copy()
-    mean_2 = mean[:, 1]
-    sigma_left_2 = sigma_left[:, 1]
-    sigma_right_2 = sigma_right[:, 1]
-
-    # Normalize the amplitudes.
-    if np.any(np.isfinite(amp_1)):
-        maximum_amp_1 = np.nanmax(amp_1)
-
-        if maximum_amp_1 > 0:
-            amp_1 /= maximum_amp_1
-
-    if np.any(np.isfinite(amp_2)):
-        maximum_amp_2 = np.nanmax(amp_2)
-
-        if maximum_amp_2 > 0:
-            amp_2 /= maximum_amp_2
-
-    # Rows with invalid amplitudes are marked as unreliable.
-    reliability_mask = (
-        np.isfinite(amp_1)
-        & np.isfinite(amp_2)
-    )
-
-    amp_1[~reliability_mask] = 0.0
-    amp_2[~reliability_mask] = 0.0
-
-    line_profile_1 = {
-        "amp": amp_1,
-        "mean": mean_1,
-        "std_left": sigma_left_1,
-        "std_right": sigma_right_1,
-        "reliability": reliability_mask,
-        "bkg": np.zeros_like(amp_1),
-    }
-
-    line_profile_2 = {
-        "amp": amp_2,
-        "mean": mean_2,
-        "std_left": sigma_left_2,
-        "std_right": sigma_right_2,
-        "reliability": reliability_mask,
-        "bkg": np.zeros_like(amp_2),
-    }
-
-    data_info["spec"][spec_idx]["meta"]["line_profile"] = (
-        line_profile_1,
-        line_profile_2,
-    )
+    print(f'Plotting the stored line profile for spec_idx {spec_idx}...')
 
     plot_lpf_diagnostics(
         (amp, mean, sigma_left, sigma_right),
@@ -302,7 +264,12 @@ sampler = nautilus_sampler.run(
     test_run=is_test,
     run_num=run_number,
     parallel=use_parallel,
+    job_script=args.job_script or os.environ.get("KL_JOB_SCRIPT"),
 )
+
+if sampler is None or (not is_test and not nautilus_sampler.last_run_complete):
+    print("Nautilus stopped before convergence; resubmit the same slit and run to continue.")
+    raise SystemExit(0)
 
 points, log_weights, log_likelihoods = sampler.posterior()
 

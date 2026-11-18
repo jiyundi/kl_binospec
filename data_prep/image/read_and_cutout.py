@@ -82,11 +82,11 @@ def cutoutimg(arrimg, wcs_loaded, objRA, objDEC,
     DECmax = objDEC + img_DECheight/2/3600
     eastIndex, southIndex = wcs_loaded.wcs_world2pix(RAmax, DECmin, 0)
     westIndex, northIndex = wcs_loaded.wcs_world2pix(RAmin, DECmax, 0)
-    arrimgcutout =       arrimg[int(southIndex):int(northIndex)+1, :]
-    arrimgcutout = arrimgcutout[:,   int(eastIndex):int(westIndex)+1]
+    arrimgcutout =       arrimg[int(southIndex):int(northIndex), :]
+    arrimgcutout = arrimgcutout[:,   int(eastIndex):int(westIndex)]
     if outputWCS:
-        wcs_cutout = wcs_loaded[int(southIndex):int(northIndex)+1,
-                                int( eastIndex):int( westIndex)+1]
+        wcs_cutout = wcs_loaded[int(southIndex):int(northIndex),
+                                int( eastIndex):int( westIndex)]
         return arrimgcutout, [RAmin, RAmax], [DECmin, DECmax], \
                wcs_cutout
     else:

@@ -45,7 +45,7 @@ _all_emilines_supported = {
 if __name__ == '__main__':
     os.environ["OMP_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
-    parser.add_argument('--slitID', default=91, type=int)
+    parser.add_argument('--slitID', default=95, type=int)
     parser.add_argument('--spec_width', default=None, type=int,
                         help='Override saved crop width; defaults to each line crop plan')
     parser.add_argument('--spec_height', default=None, type=int,
@@ -194,6 +194,7 @@ if __name__ == '__main__':
     
     # 6.4) Rescale: ESTIMATE A REASONABLE LEVEL OF IMAGE VARIANCE
     image_var = rescale_var(image_data, image_var_raw, image_mask)
+    image_var = image_var_raw
     
     # 6.5) Update meta image
     meta_image_dic = meta_image(

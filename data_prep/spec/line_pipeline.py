@@ -10,9 +10,54 @@ from .masking        import mask_negative_outliers
 
 from core.find_bkg import bkg_estimate
 from core.find_snr import snr_estimate
-from klm.line_width_profile import find_line_sigma
+from klm.line_profile_extraction import fit_asymmetric_line_profiles
 
 _spec_idx_map    = ['A', 'C', 'B']
+
+
+def _extract_line_profile(data, wavelength, line, full_rows, row_start):
+    """Fit the observed rows and place their profiles on the full slit grid."""
+    amp, mean, sigma_left, sigma_right = fit_asymmetric_line_profiles(
+        data, wavelength, line=line
+    )
+
+    normalized_amp = amp.copy()
+    for component in range(2):
+        column = normalized_amp[:, component]
+        if np.any(np.isfinite(column)):
+            maximum = np.nanmax(column)
+            if maximum > 0:
+                column /= maximum
+
+    reliable = np.all(np.isfinite(normalized_amp), axis=1)
+    normalized_amp[~reliable] = 0.0
+    rows = slice(row_start, row_start + data.shape[0])
+    profiles = []
+    for component in range(2):
+        amplitude = np.zeros(full_rows)
+        amplitude[rows] = normalized_amp[:, component]
+        reliability = np.zeros(full_rows, dtype=bool)
+        reliability[rows] = reliable
+
+        center = np.full(full_rows, np.nan) * u.Angstrom
+        left_width = np.full(full_rows, np.nan) * u.Angstrom
+        right_width = np.full(full_rows, np.nan) * u.Angstrom
+        center[rows] = mean[:, component]
+        left_width[rows] = sigma_left[:, component]
+        right_width[rows] = sigma_right[:, component]
+
+        profiles.append({
+            'amp': amplitude,
+            'amp_raw': np.pad(amp[:, component],
+                              (row_start, full_rows - rows.stop),
+                              constant_values=0),
+            'mean': center,
+            'std_left': left_width,
+            'std_right': right_width,
+            'reliability': reliability,
+            'bkg': np.zeros(full_rows),
+        })
+    return tuple(profiles)
 
 
 def process_single_line(specs, lineinfo, meta_raws,
@@ -118,10 +163,9 @@ def process_single_line(specs, lineinfo, meta_raws,
 
         # Calculate LPF
         print('Calculating line profile function...')
-        wave_step = np.mean(np.diff(cropped['wave'][y0, x0:x1]))
-        profile = find_line_sigma(
-            median_filter(spec_after_bkg_fixed, size=3), lineinfo.name,
-            lambda_scale=wave_step
+        profile = _extract_line_profile(
+            spec_after_bkg_fixed, cropped['wave'][inner], lineinfo.name,
+            full_rows=cropped['flux'].shape[0], row_start=y0,
         )
         
         full_shape = cropped['flux'].shape
@@ -132,19 +176,6 @@ def process_single_line(specs, lineinfo, meta_raws,
         full_cont[inner], full_flux[inner] = cont, spec_after_bkg_fixed
         full_var[inner],  full_mask[inner] = spec_total_var, final_mask
 
-        if x0:
-            for component in profile:
-                component[1:, 0] = (component[1:, 0].astype(float) + x0).astype(str)
-
-        if y0 or y1 != full_shape[0]:
-            padded_profile = []
-            for component in profile:
-                out = np.zeros((full_shape[0] + 1, component.shape[1]),
-                               dtype=component.dtype)
-                out[0] = component[0]
-                out[1 + y0:1 + y1] = component[1:]
-                padded_profile.append(out)
-            profile = tuple(padded_profile)
         processed.append((full_flux, full_cont, full_var, full_mask, profile))
 
     (fluxA, contA, varA, mask_addedA, line_profile_A) = processed[0]

@@ -66,7 +66,7 @@ def meta_spec_ABC(dat_dict, spec_shape=None, slit_len=None):
         'line_species':   None, 
         'lambda_grid':    None,
         'rhl':            None,
-        'line_profile':   None, # px, replace line_profile_path in config 
+        'line_profile':   None, # Placeholder. Will update in line_pipeline.py > "Calculate LPF"
     }
     
     meta_spec_A = meta_spec_C.copy()
