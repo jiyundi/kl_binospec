@@ -112,7 +112,7 @@ class KLInference():
             self.meta_spec.append(this_spec['meta'])
             self.data_spec.append(this_spec['data'])
             self.mask_spec.append(this_spec['mask'])
-            self.var_spec.append( this_spec['var' ])
+            self.var_spec.append( this_spec['var' ]) # Considered total. See "spec_total_var" in line_pipeline.py
 
             if self.config.likelihood.isFitSpec == 'rotation_curve':
                 # Pass the line profiles available from data 
@@ -293,12 +293,12 @@ class KLInference():
                 if 'spec' in fit_type:
                     data_spec = self.data_spec[spec_i]
                     mask_spec = self.mask_spec[spec_i]
-                    var_spec  = self.var_spec[spec_i]
+                    var_total = self.var_spec[spec_i] # Considered total. See "spec_total_var" in line_pipeline.py
 
                     model_spec = self.spec_model[spec_i].get_observable(this_line_dict)
 
                     chi2_one_spec += self._loglike_one_slit(
-                        data_spec, mask_spec, var_spec, model_spec
+                        data_spec, mask_spec, var_total, model_spec
                     )
                 
                 chi2 += chi2_one_spec
@@ -325,10 +325,9 @@ class KLInference():
     
     
     def _loglike_one_slit(self, 
-                          data_spec, mask_spec, var_spec, model_spec, 
+                          data_spec, mask_spec, var_total, model_spec, 
                           reduce=False):
-        resi2     = (data_spec[mask_spec] - model_spec[mask_spec])**2
-        var_total =  data_spec[mask_spec] + var_spec[mask_spec]
+        resi2 = (data_spec[mask_spec] - model_spec[mask_spec])**2
         
         if reduce:
             chi2 = np.sum( resi2 / var_total )
@@ -361,7 +360,7 @@ class KLInference():
         mask_image = self.mask_image
         
         resi2     = (data_image[mask_image] - model_image[mask_image])**2
-        var_total =  data_image[mask_image] + var_image[mask_image]
+        var_total =  var_image[mask_image]
 
         if reduce:
             chi2 = np.sum( resi2 / var_total )
