@@ -87,7 +87,7 @@ def process_single_line(specs, lineinfo, meta_raws,
         D = D' + dB = D' - bkg_estimate(D')
         """
         try: 
-            bkg_est = bkg_estimate(np.where(final_mask, spec_after_cont, np.nan))[0]
+            bkg_est = bkg_estimate(np.where(spec_mask, spec_after_cont, np.nan))[0]
             # print(f'Estimated bkg = {bkg_est:.1f}')
         except AssertionError: 
             print('No significant emission structure was detected. Set bkg to 0.')
