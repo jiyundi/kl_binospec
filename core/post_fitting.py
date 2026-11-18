@@ -567,9 +567,9 @@ def plot_obs_fit_res(
 
         # (2.9) Line label on obs panel
         ax_spe_obs.text(
-            0.02, 0.98,
+            0.02, 0.02,
             _LINE_DISPLAY.get(line, line),
-            fontsize=18, color='white', ha='left', va='top',
+            fontsize=18, color='white', ha='left', va='bottom',
             transform=ax_spe_obs.transAxes,
             bbox=dict(facecolor='black', alpha=0.75),
         )
