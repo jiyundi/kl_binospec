@@ -6,17 +6,14 @@ from scipy.interpolate import UnivariateSpline
 
 
 def extract_2d_continuum(flux, mask, 
-                         cont_y0=None, mode='simple', cont_scale=1, 
+                         mode='simple', 
                          smooth=3, verbose=False):
     arr_flux = np.where(mask, flux, np.nan)
     ny, nx = arr_flux.shape # slit, wavelength
     margin = 8
     
-    if cont_y0 is not None:
-        mode = 'manual'
-    
     if mode=='simple':
-        flx = median_filter(arr_flux * cont_scale, size=smooth)
+        flx = median_filter(arr_flux, size=smooth)
         spatial_profi = np.nanmean(
             np.concatenate((flx[:, :margin], flx[:, -margin:]), axis=1), 
             axis=1)
@@ -51,8 +48,7 @@ def extract_2d_continuum(flux, mask,
     
         # initial Gaussian spatial profile
         for x in range(nx):
-            if cont_y0 is None:
-                cont_y0 = ny // 2
+            cont_y0 = ny // 2
             prof = np.exp(-(ygrid - cont_y0)**2 / (2*sigma**2))
             P[:, x] = prof
     
@@ -62,7 +58,7 @@ def extract_2d_continuum(flux, mask,
         #     P[y,:] = gaussian_filter1d(P[y,:], smooth)
         
         # build 2D continuum model
-        model = P * cont[:,np.newaxis].T * cont_scale
+        model = P * cont[:,np.newaxis].T
             
     # vmin, vmax = np.nanmin(arr_flux), np.nanmax(arr_flux)
     # import matplotlib.pyplot as plt

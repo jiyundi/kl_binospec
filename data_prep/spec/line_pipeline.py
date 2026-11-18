@@ -1,9 +1,8 @@
 import numpy as np
 import astropy.units as u
-from   scipy.ndimage import median_filter
 
 from  data_structure import SpecData
-from .build_var      import from_total_variance, build_var
+from .build_var      import from_total_variance, rescale_var
 from .continuum      import extract_2d_continuum
 from .crop_plan      import replay_plan
 from .masking        import mask_negative_outliers
@@ -13,6 +12,184 @@ from core.find_snr import snr_estimate
 from klm.line_profile_extraction import fit_asymmetric_line_profiles
 
 _spec_idx_map    = ['A', 'C', 'B']
+
+
+def process_single_line(specs, lineinfo, meta_raws,
+                        spec_width, spec_height,
+                        clear_mode='simple', crop_plan=None):
+    """
+    This func performs the spectrum cutting in 9 steps. 
+    It located in Section 8 in main.py. See other procedures there.
+    """
+    # 8.0) Pre-cutting check: crop plans required
+    if crop_plan is None:
+        raise ValueError(f'Manual crop plan is required for {lineinfo.name}')
+    if (crop_plan['name'] != lineinfo.name or
+            not np.allclose(crop_plan['line_waves_angstrom'], lineinfo.wav) or
+            not np.isclose(crop_plan['initial_redshift'], lineinfo.redshift)):
+        raise ValueError('Saved crop plan does not match requested line or redshift')
+
+    sources = [specs.specA, specs.specC, specs.specB]
+    spec2dACB = replay_plan(sources, crop_plan, spec_width, spec_height)
+    lineinfo.redshift = crop_plan['corrected_redshift']
+
+    processed = []
+    for i, cropped in enumerate(spec2dACB):
+        
+        # 8.1) Mask out bad pixels
+        coverage = cropped['coverage']
+
+        rows, cols = np.where(coverage)
+        if len(rows) == 0:
+            raise ValueError(f'No observed pixels in Set {_spec_idx_map[i]}')
+        y0, y1 = int(rows.min()), int(rows.max()) + 1
+        x0, x1 = int(cols.min()), int(cols.max()) + 1
+        inner = np.s_[y0:y1, x0:x1]
+        valid_flux = cropped['flux'][inner]
+        base_mask = mask_negative_outliers(
+            valid_flux, 
+            cropped['mask'][inner], 
+            cropped['var_total'][inner], 
+            floor=-20.0, nsigma=3
+        )
+
+        # 8.2) Extract continuum AND SUBSTRACT
+        print('Continuums are being extracted and substracting data...')
+
+        cont = extract_2d_continuum(
+            valid_flux, base_mask,
+            mode=clear_mode, verbose=False, smooth=9
+        )
+        if np.isnan(cont).all():
+            print(f'WARNING: Continuum is all NaN for Set {_spec_idx_map[i]}; skipping subtraction.')
+            cont = np.zeros_like(valid_flux)
+        spec_after_cont = valid_flux - cont
+
+        # 8.3) Read out MMT Binospec pipeline
+        spec_total_var_raw, spec_mask = from_total_variance(
+            spec_after_cont, base_mask, cropped['var_total'][inner]
+        )
+
+        """
+        8.4) Background subtraction fix
+
+        Raw counts (I) = Data (D) + Background (B0) if a good background (B0) can 
+        be estimated. Here, D := Emission line (F) + Continuum (C). A robust 
+        signal-to-noise ratio (SNR) requires an I or D, giving 
+        SNR = Sum(I or D) / SQRT(Sum(Var)). 
+
+        However, the MMT Binospec pipeline may subtract an inproperate background 
+        level (B0 + dB) and only D' = I - B0 - dB = D - dB is provided. One can find
+        the data has background pixels bkg_estimate(D') < 0 which hints the bias 
+        dB := -bkg_estimate(D') > 0. 
+
+        Hence, for a better-defined SNR, D' needs to be reverted to D:
+        D = D' + dB = D' - bkg_estimate(D')
+        """
+        try: 
+            bkg_est = bkg_estimate(np.where(final_mask, spec_after_cont, np.nan))[0]
+            # print(f'Estimated bkg = {bkg_est:.1f}')
+        except AssertionError: 
+            print('No significant emission structure was detected. Set bkg to 0.')
+            bkg_est = 0
+        spec_after_bkg_fixed = spec_after_cont - bkg_est
+
+        # 8.5) Rescale var
+        # In practice, the raw Binospec var is over-estimated.
+        spec_total_var = rescale_var(spec_after_bkg_fixed, spec_total_var_raw, spec_mask)
+        final_mask = spec_mask & (spec_total_var > 0)
+        
+        # 8.6) Check SNR feasiblity
+        spec_snr = snr_estimate(
+            np.where(final_mask, spec_after_bkg_fixed, np.nan),
+            bkg_is_subtracted=False, 
+            var_given=spec_total_var
+        )
+        print(f'Spec SNR (Set {i}):', round(spec_snr, 1), )
+
+        # 8.7) Calculate LPF
+        print('Calculating line profile function...')
+        profile = _extract_line_profile(
+            spec_after_bkg_fixed, cropped['wave'][inner], lineinfo.name,
+            full_rows=cropped['flux'].shape[0], row_start=y0,
+            mask=final_mask,
+        )
+        
+        full_shape = cropped['flux'].shape
+        full_cont  = np.zeros(full_shape, dtype=cont.dtype)
+        full_flux  = np.zeros(full_shape, dtype=spec_after_bkg_fixed.dtype)
+        full_var   = np.zeros(full_shape, dtype=spec_total_var.dtype)
+        full_mask  = np.zeros(full_shape, dtype=bool)
+        full_cont[inner], full_flux[inner] = cont, spec_after_bkg_fixed
+        full_var[inner],  full_mask[inner] = spec_total_var, final_mask
+
+        processed.append((full_flux, full_cont, full_var, full_mask, profile))
+
+    (fluxA, contA, varA, mask_addedA, line_profile_A) = processed[0]
+    (fluxC, contC, varC, mask_addedC, line_profile_C) = processed[1]
+    (fluxB, contB, varB, mask_addedB, line_profile_B) = processed[2]
+
+    # 8.8) Write meta spec info - linename, wave spec, ngrid...
+    meta_specA = {}
+    meta_specB = {}
+    meta_specC = {}
+    for key in meta_raws['A'].keys():
+        if key == 'line_species':
+            meta_specA['line_species'] = lineinfo.name
+            meta_specB['line_species'] = lineinfo.name
+            meta_specC['line_species'] = lineinfo.name
+        elif key == 'line_profile':
+            meta_specA['line_profile'] = line_profile_A
+            meta_specB['line_profile'] = line_profile_B
+            meta_specC['line_profile'] = line_profile_C
+        elif key == 'lambda_grid':
+            meta_specA['lambda_grid'] = spec2dACB[0]['wave'] * u.Angstrom
+            meta_specB['lambda_grid'] = spec2dACB[2]['wave'] * u.Angstrom
+            meta_specC['lambda_grid'] = spec2dACB[1]['wave'] * u.Angstrom
+        elif key == 'slitLen':
+            meta_specA['slitLen'] = len(spec2dACB[0]['wave']) * meta_raws['A']['pixScale']
+            meta_specB['slitLen'] = len(spec2dACB[2]['wave']) * meta_raws['B']['pixScale']
+            meta_specC['slitLen'] = len(spec2dACB[1]['wave']) * meta_raws['C']['pixScale']
+        elif key == 'ngrid':
+            meta_specA['ngrid'] = spec2dACB[0]['wave'].shape
+            meta_specB['ngrid'] = spec2dACB[2]['wave'].shape
+            meta_specC['ngrid'] = spec2dACB[1]['wave'].shape
+        else:
+            meta_specA[key] = meta_raws['A'][key]
+            meta_specB[key] = meta_raws['B'][key]
+            meta_specC[key] = meta_raws['C'][key]
+
+    # 8.9) Pack all data
+    SetA = SpecData(data = fluxA,
+                    var  = varA,
+                    cont = contA,
+                    mask = mask_addedA,
+                    meta = meta_specA,
+                    mask_base = spec2dACB[0]['mask'],
+                    coverage_mask = spec2dACB[0]['coverage'],
+                    var_total = spec2dACB[0]['var_total']
+                    )
+    SetC = SpecData(data = fluxC,
+                    var  = varC,
+                    cont = contC,
+                    mask = mask_addedC,
+                    meta = meta_specC,
+                    mask_base = spec2dACB[1]['mask'],
+                    coverage_mask = spec2dACB[1]['coverage'],
+                    var_total = spec2dACB[1]['var_total']
+                    )
+    SetB = SpecData(data = fluxB,
+                    var  = varB,
+                    cont = contB,
+                    mask = mask_addedB,
+                    meta = meta_specB,
+                    mask_base = spec2dACB[2]['mask'],
+                    coverage_mask = spec2dACB[2]['coverage'],
+                    var_total = spec2dACB[2]['var_total']
+                    )
+    spec_data_list = [SetA, SetC, SetB]
+
+    return spec_data_list, lineinfo
 
 
 def _extract_line_profile(data, wavelength, line, full_rows, row_start, mask=None):
@@ -61,192 +238,6 @@ def _extract_line_profile(data, wavelength, line, full_rows, row_start, mask=Non
             'background_fitted': True,
         })
     return tuple(profiles)
-
-
-def process_single_line(specs, lineinfo, meta_raws,
-                        spec_width, spec_height,
-                        clear_mode='simple', cont_y0s=None,
-                        cont_scales=None, crop_plan=None):
-
-    if crop_plan is None:
-        raise ValueError(f'Manual crop plan is required for {lineinfo.name}')
-    if (crop_plan['name'] != lineinfo.name or
-            not np.allclose(crop_plan['line_waves_angstrom'], lineinfo.wav) or
-            not np.isclose(crop_plan['initial_redshift'], lineinfo.redshift)):
-        raise ValueError('Saved crop plan does not match requested line or redshift')
-
-    sources = [specs.specA, specs.specC, specs.specB]
-    spec2dACB = replay_plan(sources, crop_plan, spec_width, spec_height)
-    lineinfo.redshift = crop_plan['corrected_redshift']
-
-    # 6. Non-cutting processing
-    # 6.1) Extract continuum AND SUBSTRACT
-    print('Continuums are being extracted and substracting data...')
-
-    processed = []
-    for i, cropped in enumerate(spec2dACB):
-        coverage = cropped['coverage']
-
-        rows, cols = np.where(coverage)
-        if len(rows) == 0:
-            raise ValueError(f'No observed pixels in Set {_spec_idx_map[i]}')
-        y0, y1 = int(rows.min()), int(rows.max()) + 1
-        x0, x1 = int(cols.min()), int(cols.max()) + 1
-        inner = np.s_[y0:y1, x0:x1]
-        valid_flux = cropped['flux'][inner]
-        base_mask = mask_negative_outliers(
-            valid_flux, 
-            cropped['mask'][inner], 
-            cropped['var_total'][inner], 
-            floor=-20.0, nsigma=3
-        )
-
-        cont = extract_2d_continuum(
-            valid_flux, base_mask,
-            cont_scale=(cont_scales[i] if cont_scales is not None else 1),
-            cont_y0=(cont_y0s[i] - y0 if cont_y0s is not None else None),
-            mode=clear_mode, verbose=False, smooth=9
-        )
-        if np.isnan(cont).all():
-            print(f'WARNING: Continuum is all NaN for Set {_spec_idx_map[i]}; skipping subtraction.')
-            cont = np.zeros_like(valid_flux)
-        spec_after_cont = valid_flux - cont
-
-        # Read out MMT Binospec pipeline
-        spec_total_var, final_mask = from_total_variance(
-            spec_after_cont, base_mask, cropped['var_total'][inner]
-        )
-
-        """
-        Background subtraction fix
-
-        Raw counts (I) = Data (D) + Background (B0) if a good background (B0) can 
-        be estimated. Here, D := Emission line (F) + Continuum (C). A robust 
-        signal-to-noise ratio (SNR) requires an I or D, giving 
-        SNR = Sum(I or D) / SQRT(Sum(Var)). 
-
-        However, the MMT Binospec pipeline may subtract an inproperate background 
-        level (B0 + dB) and only D' = I - B0 - dB = D - dB is provided. One can find
-        the data has background pixels bkg_estimate(D') < 0 which hints the bias 
-        dB := -bkg_estimate(D') > 0. 
-
-        Hence, for a better-defined SNR, D' needs to be reverted to D:
-        D = D' + dB = D' - bkg_estimate(D')
-        """
-        try: 
-            bkg_est = bkg_estimate(np.where(final_mask, spec_after_cont, np.nan))[0]
-            # print(f'Estimated bkg = {bkg_est:.1f}')
-        except AssertionError: 
-            print('No significant emission structure was detected. Set bkg to 0.')
-            bkg_est = 0
-        spec_after_bkg_fixed = spec_after_cont - bkg_est
-
-        # # In practice, raw Binospec var is over-estimated and needs to be rescaled
-        # spec_var_expected, mask_expected = build_var(
-        #     spec_after_bkg_fixed, final_mask
-        # )
-        # # spec_var_expected = spec_var_expected_sum
-        # level_expected = np.median(spec_var_expected[mask_expected])
-        # level_raw      = np.median(spec_noise_var_raw[final_mask])
-        # rescale_factor = level_expected / level_raw
-        # spec_noise_var = spec_noise_var_raw * rescale_factor
-        # spec_total_var = (
-        #     median_filter(spec_after_bkg_fixed, size=3) # as Poisson shot noise
-        #     + spec_noise_var     # as Gaussian white noise
-        # )
-        # final_mask &= (spec_total_var > 0)
-        
-        # Check SNR feasiblity
-        spec_snr = snr_estimate(
-            np.where(final_mask, spec_after_bkg_fixed, np.nan),
-            bkg_is_subtracted=False, 
-            var_given=spec_total_var
-        )
-        print(f'Spec SNR (Set {i}):', round(spec_snr, 1), )
-
-        # Calculate LPF
-        print('Calculating line profile function...')
-        profile = _extract_line_profile(
-            spec_after_bkg_fixed, cropped['wave'][inner], lineinfo.name,
-            full_rows=cropped['flux'].shape[0], row_start=y0,
-            mask=final_mask,
-        )
-        
-        full_shape = cropped['flux'].shape
-        full_cont  = np.zeros(full_shape, dtype=cont.dtype)
-        full_flux  = np.zeros(full_shape, dtype=spec_after_bkg_fixed.dtype)
-        full_var   = np.zeros(full_shape, dtype=spec_total_var.dtype)
-        full_mask  = np.zeros(full_shape, dtype=bool)
-        full_cont[inner], full_flux[inner] = cont, spec_after_bkg_fixed
-        full_var[inner],  full_mask[inner] = spec_total_var, final_mask
-
-        processed.append((full_flux, full_cont, full_var, full_mask, profile))
-
-    (fluxA, contA, varA, mask_addedA, line_profile_A) = processed[0]
-    (fluxC, contC, varC, mask_addedC, line_profile_C) = processed[1]
-    (fluxB, contB, varB, mask_addedB, line_profile_B) = processed[2]
-
-    # 7. Write meta spec info - linename, wave spec, ngrid...
-    meta_specA = {}
-    meta_specB = {}
-    meta_specC = {}
-    for key in meta_raws['A'].keys():
-        if key == 'line_species':
-            meta_specA['line_species'] = lineinfo.name
-            meta_specB['line_species'] = lineinfo.name
-            meta_specC['line_species'] = lineinfo.name
-        elif key == 'line_profile':
-            meta_specA['line_profile'] = line_profile_A
-            meta_specB['line_profile'] = line_profile_B
-            meta_specC['line_profile'] = line_profile_C
-        elif key == 'lambda_grid':
-            meta_specA['lambda_grid'] = spec2dACB[0]['wave'] * u.Angstrom
-            meta_specB['lambda_grid'] = spec2dACB[2]['wave'] * u.Angstrom
-            meta_specC['lambda_grid'] = spec2dACB[1]['wave'] * u.Angstrom
-        elif key == 'slitLen':
-            meta_specA['slitLen'] = len(spec2dACB[0]['wave']) * meta_raws['A']['pixScale']
-            meta_specB['slitLen'] = len(spec2dACB[2]['wave']) * meta_raws['B']['pixScale']
-            meta_specC['slitLen'] = len(spec2dACB[1]['wave']) * meta_raws['C']['pixScale']
-        elif key == 'ngrid':
-            meta_specA['ngrid'] = spec2dACB[0]['wave'].shape
-            meta_specB['ngrid'] = spec2dACB[2]['wave'].shape
-            meta_specC['ngrid'] = spec2dACB[1]['wave'].shape
-        else:
-            meta_specA[key] = meta_raws['A'][key]
-            meta_specB[key] = meta_raws['B'][key]
-            meta_specC[key] = meta_raws['C'][key]
-
-    # 8. Pack all data
-    SetA = SpecData(data = fluxA,
-                    var  = varA,
-                    cont = contA,
-                    mask = mask_addedA,
-                    meta = meta_specA,
-                    mask_base = spec2dACB[0]['mask'],
-                    coverage_mask = spec2dACB[0]['coverage'],
-                    var_total = spec2dACB[0]['var_total']
-                    )
-    SetC = SpecData(data = fluxC,
-                    var  = varC,
-                    cont = contC,
-                    mask = mask_addedC,
-                    meta = meta_specC,
-                    mask_base = spec2dACB[1]['mask'],
-                    coverage_mask = spec2dACB[1]['coverage'],
-                    var_total = spec2dACB[1]['var_total']
-                    )
-    SetB = SpecData(data = fluxB,
-                    var  = varB,
-                    cont = contB,
-                    mask = mask_addedB,
-                    meta = meta_specB,
-                    mask_base = spec2dACB[2]['mask'],
-                    coverage_mask = spec2dACB[2]['coverage'],
-                    var_total = spec2dACB[2]['var_total']
-                    )
-    spec_data_list = [SetA, SetC, SetB]
-
-    return spec_data_list, lineinfo
 
 
 def redshift_update(spec2dACB, redshift,

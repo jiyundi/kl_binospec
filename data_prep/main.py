@@ -53,8 +53,6 @@ if __name__ == '__main__':
     parser.add_argument('--img_width',   default=40, type=int)
     parser.add_argument('--img_height',  default=40, type=int)
     parser.add_argument('--clear_mode',  default='simple', type=str)
-    parser.add_argument('--cont_scale',  default=[1.], type=int, nargs='+')
-    parser.add_argument('--cont_y0s',    default=[10], type=int, nargs='+')
     parser.add_argument('--crop_plan', default=None,
                         help='JSON crop plans; defaults to spec_crop_plans/slit_NNN_crops.json')
     parser.add_argument('--image_mask_plan', default=None,
@@ -66,8 +64,6 @@ if __name__ == '__main__':
     img_width   = args.img_width
     img_height  = args.img_height
     clear_mode  = args.clear_mode
-    cont_scale  = args.cont_scale
-    cont_y0ss   = args.cont_y0s
     
     # 1. FOLDER NAMES AND FILENAMES
     img_dir = '../../../RSCH3/HSC_img_A383/'
@@ -260,28 +256,14 @@ if __name__ == '__main__':
             redshift = redshift
         )
         
-        # 7.4.2) core function of cutting
-        if cont_y0ss is not None:
-            if len(cont_y0ss) > 1:
-                cont_y0s = [ cont_y0ss[3*line_i    ], 
-                             cont_y0ss[3*line_i + 1], 
-                             cont_y0ss[3*line_i + 2] ]
-            else:
-                cont_y0s = None
-        
-        if len(cont_scale) > 1:
-            cont_scales = [cont_scale[3*line_i    ], 
-                           cont_scale[3*line_i + 1], 
-                           cont_scale[3*line_i + 2] ]
-        else:
-            cont_scales = None
+        # --------------------------------------------------------
+        # 8. Core function of cutting
+        # --------------------------------------------------------
         
         data_this_line, line_info_updated = process_single_line(
             raw_specs, line_info, meta_spec_raws, 
             spec_width, spec_height, 
-            clear_mode, 
-            cont_scales=cont_scales, 
-            cont_y0s=cont_y0s, 
+            clear_mode,
             crop_plan=saved_plans.get(linename),
         )
         
@@ -294,10 +276,10 @@ if __name__ == '__main__':
         line_i += 1
     
     # -------------------------------------------------------------
-    # 8. FINALLY UPDATE z and M* IN META GALAXY
+    # 9. FINALLY UPDATE z and M* IN META GALAXY
     # -------------------------------------------------------------
     
-    # 8.1) Read [slit#, M_stellar, err]
+    # 9.1) Read [slit#, M_stellar, err]
     dg = pd.read_csv(f"{Ms_folder}Mstellar_table.txt",
                      sep=r"\s+", header=0,
                      names=["slit", "median", "std", "err_lo", "mean", "err_hi"])
@@ -314,16 +296,16 @@ if __name__ == '__main__':
         print('Process stopped because no stellar mass for this slit. ✅\n')
         import sys; sys.exit(0)
     
-    # 8.2) From spec cutouts, take an average of precise redshifts
+    # 9.2) From spec cutouts, take an average of precise redshifts
     redo_z = np.mean(redo_zs)
     
-    # 8.3) wrap up
+    # 9.3) wrap up
     meta_gal['redshift'] = redo_z
     meta_gal['log10_Mstar']     = log10_Mstar
     meta_gal['log10_Mstar_err'] = log10_Mstar_err
     
     # ========================================================================
-    # 9. NOW SAVING PKL
+    # 10. NOW SAVING PKL
     # ========================================================================
     
     data_info = RealDataInfo(spec   = specs_data_info,
@@ -335,7 +317,10 @@ if __name__ == '__main__':
     with open(f'{real_pkl_folder}pkl/slit_{slit_name}.pkl', "wb") as f:
         joblib.dump(asdict(data_info), f)
     
-    # Plot
+    # ========================================================================
+    # 11. Plotting
+    # ========================================================================
+    
     make_exam_plots(data_info, f'{slit_num:03d}', 
                     pkl_folder=real_pkl_folder)
     

@@ -52,3 +52,25 @@ def build_var(data, mask, option=2):
     mask_added = mask & mask_add
     
     return spec_var, mask_added
+
+
+def rescale_var(spec_data, spec_var_raw, spec_mask=None, option=2):
+    if spec_mask is None:
+        spec_mask = np.ones(spec_data.shape, dtype=bool)
+
+    # OPTION 2: avoid central flux
+    if option == 2:
+        mask_var    = np.ones(spec_data.shape, dtype=bool)
+        left, right = spec_data.shape[1]//4, spec_data.shape[1] - spec_data.shape[1]//4
+        up,   down  = spec_data.shape[0]//4, spec_data.shape[0] - spec_data.shape[0]//4
+        mask_var[up:down, left:right] = False
+
+        raw_var_amp = np.nanmax(spec_var_raw[mask_var & spec_mask])
+        gaussian_background_noise = np.nanstd(spec_data[mask_var & spec_mask])
+
+        rescale_fac = 1/raw_var_amp * gaussian_background_noise**2
+        assert rescale_fac > 0, f'Rescale factor is negative: {rescale_fac}'
+        spec_var = spec_var_raw * rescale_fac
+        print(f'Variance of spec has been rescaled by {rescale_fac:.2e}')
+    
+    return spec_var
