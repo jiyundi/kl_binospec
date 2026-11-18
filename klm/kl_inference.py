@@ -250,13 +250,10 @@ class KLInference():
             for i in range(n_sets):
                 
                 # Multi spec may have various I0 due to exposure
-                key_correct   = ['I01', 'bkg_level', 
-                                #  'f1_0', 
-                                 'f1_1', 'f1_2']
+                key_correct   = ['I01', 'bkg_level', 'f1_1', 'f1_2']
                 doublet_lines = ['O2']
                 if line in doublet_lines:
                     key_correct.append('I02')
-                    # key_correct.append('f2_0')
                     key_correct.append('f2_1')
                     key_correct.append('f2_2')
                     
@@ -328,6 +325,7 @@ class KLInference():
                           data_spec, mask_spec, var_total, model_spec, 
                           reduce=False):
         resi2 = (data_spec[mask_spec] - model_spec[mask_spec])**2
+        var_total = var_total[mask_spec]
         
         if reduce:
             chi2 = np.sum( resi2 / var_total )

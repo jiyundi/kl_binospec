@@ -104,7 +104,6 @@ class Parameters():
                 params[f'{line}_params']['dx_vel_2'] = 0
                 params[f'{line}_params']['dy_vel_2'] = 0
                 params[f'{line}_params']['I02']      = 0
-                params[f'{line}_params']['f2_0']     = 1
                 params[f'{line}_params']['f2_1']     = 1
                 params[f'{line}_params']['f2_2']     = 1
                 
@@ -112,11 +111,11 @@ class Parameters():
                 suffix  = f'_spec{i}'
                 prm_add = {'I01':    None, 'bkg_level': None, 
                            'dx_vel': None, 'dy_vel':    None,
-                        #    'f1_0':   None, 
-                           'f1_1':   None, 'f1_2':   None} # <-----------------------------------------------
+                           'f1_1':   None, 'f1_2':      None}
                 if line in doublet_lines:
                     prm_add['I02']  = None
-                    prm_add['f2_0'] = None
+                    prm_add['f2_1'] = None
+                    prm_add['f2_2'] = None
                     prm_add['dx_vel_2'] = None
                     prm_add['dy_vel_2'] = None
                 for key, _ in prm_add.copy().items():

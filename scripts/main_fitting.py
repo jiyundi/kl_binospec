@@ -178,43 +178,34 @@ data_info['image']['meta']['wcs'] = galsim.AstropyWCS(wcs=ap_wcs)
 # -----------------------------------------------------------------------
 # 1.1 Plot the asymmetric line profiles stored in the PKL
 # -----------------------------------------------------------------------
-
-for spec_idx in range(len(data_info["spec"])):
-
-    spectrum = data_info["spec"][spec_idx]
-    line_profile = spectrum["meta"]["line_profile"]
+for spec_idx, spectrum in enumerate(data_info["spec"]):
+    line_profile = spectrum["meta"].get("line_profile")
+    required = ("amp_raw", "mean", "std_left", "std_right", "bkg")
     if (not isinstance(line_profile, (tuple, list))
             or len(line_profile) != 2
             or not all(isinstance(component, dict)
-                       and "amp_raw" in component
+                       and component.get("background_fitted")
+                       and all(key in component for key in required)
                        for component in line_profile)):
         raise ValueError(
             f"Spectrum {spec_idx} has an old or incomplete line_profile in "
             f"{data_info_path}; regenerate this PKL with data_prep/main.py."
         )
 
-    amp = np.stack([component["amp_raw"] for component in line_profile], axis=1)
-    mean = np.stack([component["mean"] for component in line_profile], axis=1)
-    sigma_left = np.stack(
-        [component["std_left"] for component in line_profile], axis=1
+    lpf = tuple(
+        np.stack([component[key] for component in line_profile], axis=1)
+        for key in required[:4]
     )
-    sigma_right = np.stack(
-        [component["std_right"] for component in line_profile], axis=1
-    )
-
-    print(f'Plotting the stored line profile for spec_idx {spec_idx}...')
-
+    print(f"Plotting the stored line profile for spec_idx {spec_idx}...")
     plot_lpf_diagnostics(
-        (amp, mean, sigma_left, sigma_right),
-        data_info["spec"][spec_idx]["data"],
-        data_info["spec"][spec_idx]["mask"],
-        wavelength=data_info["spec"][spec_idx]["meta"]["lambda_grid"],
-        line=data_info["spec"][spec_idx]["meta"]["line_species"],
+        lpf, spectrum["data"], spectrum["mask"],
+        wavelength=spectrum["meta"]["lambda_grid"],
+        line=spectrum["meta"]["line_species"],
+        row_background=line_profile[0]["bkg"],
         filename=str(
             diagnostic_folder / f"LPF_slit{slit_id:03d}_line{spec_idx}.png"
-        )
+        ),
     )
-    
 
 # -----------------------------------------------------------------------
 # 2. Load the fitting configuration

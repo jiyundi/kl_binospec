@@ -15,10 +15,10 @@ from klm.line_profile_extraction import fit_asymmetric_line_profiles
 _spec_idx_map    = ['A', 'C', 'B']
 
 
-def _extract_line_profile(data, wavelength, line, full_rows, row_start):
+def _extract_line_profile(data, wavelength, line, full_rows, row_start, mask=None):
     """Fit the observed rows and place their profiles on the full slit grid."""
-    amp, mean, sigma_left, sigma_right = fit_asymmetric_line_profiles(
-        data, wavelength, line=line
+    amp, mean, sigma_left, sigma_right, background = fit_asymmetric_line_profiles(
+        data, wavelength, line=line, mask=mask, return_background=True
     )
 
     normalized_amp = amp.copy()
@@ -55,7 +55,10 @@ def _extract_line_profile(data, wavelength, line, full_rows, row_start):
             'std_left': left_width,
             'std_right': right_width,
             'reliability': reliability,
-            'bkg': np.zeros(full_rows),
+            'bkg': np.pad(background,
+                          (row_start, full_rows - rows.stop),
+                          constant_values=np.nan),
+            'background_fitted': True,
         })
     return tuple(profiles)
 
@@ -166,6 +169,7 @@ def process_single_line(specs, lineinfo, meta_raws,
         profile = _extract_line_profile(
             spec_after_bkg_fixed, cropped['wave'][inner], lineinfo.name,
             full_rows=cropped['flux'].shape[0], row_start=y0,
+            mask=final_mask,
         )
         
         full_shape = cropped['flux'].shape

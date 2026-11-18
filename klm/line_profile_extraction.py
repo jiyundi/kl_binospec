@@ -65,228 +65,156 @@ def _average_neighboring_rows(data, wave, y):
 
 
 def fit_asymmetric_line_profiles(
-        data,
-        wavelength,
-        line,
-        doublets=("O2",),
+        data, wavelength, line, doublets=("O2",),
         sigma_bounds_pix=(1.0, 20.0),
-        separation_bounds_pix=(4.0, 12.0),
-        initial_sigma_pix=3.0):
-    """Fit an asymmetric single line or doublet at each spatial row.
+        separation_bounds_pix=(4.0, 12.0), initial_sigma_pix=3.0,
+        mask=None, return_background=False):
+    """Fit a line and constant background to each original spatial row.
 
-    Each fit averages three rows on the central row's wavelength grid.
-    At the edges, the outermost row is used twice.
-
-    Parameters
-    ----------
-    data : ndarray, shape (ny, nx)
-        Two-dimensional spectrum.
-    wavelength : Quantity or ndarray, shape (ny, nx)
-        Wavelength at each spatial and spectral pixel. Plain arrays use angstroms.
-    line : str
-        Line name. Names in doublets use the doublet model.
-    doublets : sequence of str
-        Line names that use the doublet model.
-    sigma_bounds_pix, separation_bounds_pix : tuple of float
-        Bounds on the wing widths and doublet separation in spectral pixels.
-        They are converted to angstroms using the median wavelength spacing.
-    initial_sigma_pix : float
-        Initial width for each wing, in spectral pixels.
-
-    Returns
-    -------
-    amp : ndarray, shape (ny, 2)
-        Peak amplitudes.
-    mu, sigma_left, sigma_right : Quantity, shape (ny, 2)
-        Peak centers and left and right wing widths in angstroms.
-        For a successful single-line fit, the unused center is NaN and the
-        unused amplitude and widths are zero. Failed rows are all NaN.
+    A three-row average is used for initial parameters only. If
+    ``return_background`` is true, append an array of fitted row backgrounds
+    to the usual (amp, center, left width, right width) result. Wavelengths
+    and widths are returned as angstrom quantities. True mask pixels are used.
     """
     data = np.asarray(data, dtype=float)
-
     if data.ndim != 2:
         raise ValueError("data must be a two-dimensional array with shape (ny, nx)")
-
     ny, nx = data.shape
-
     wave = _as_angstrom_values(wavelength)
-
-    if wave.shape != (ny, nx):
+    if wave.shape != data.shape:
         raise ValueError("wavelength must have the same shape (ny, nx) as data")
+    if mask is None:
+        mask = np.ones(data.shape, dtype=bool)
+    else:
+        mask = np.asarray(mask, dtype=bool)
+        if mask.shape != data.shape:
+            raise ValueError("mask must have the same shape (ny, nx) as data")
 
-    # Use the typical wavelength spacing across all rows.
     delta_lambda = np.nanmedian(np.abs(np.diff(wave, axis=1)))
-
     if not np.isfinite(delta_lambda) or delta_lambda <= 0:
         raise ValueError("Cannot determine a finite, positive wavelength spacing")
-
-    min_sigma = sigma_bounds_pix[0] * delta_lambda
-    max_sigma = sigma_bounds_pix[1] * delta_lambda
+    min_sigma, max_sigma = np.asarray(sigma_bounds_pix) * delta_lambda
+    min_separation, max_separation = np.asarray(separation_bounds_pix) * delta_lambda
     sigma0 = initial_sigma_pix * delta_lambda
-
-    min_separation = separation_bounds_pix[0] * delta_lambda
-    max_separation = separation_bounds_pix[1] * delta_lambda
-
     if min_sigma <= 0 or max_sigma <= min_sigma:
         raise ValueError("sigma_bounds_pix must be positive and strictly increasing")
-
     if min_separation <= 0 or max_separation <= min_separation:
         raise ValueError("separation_bounds_pix must be positive and strictly increasing")
 
     use_doublet = line in doublets
-    function_this_line = (
-        asymmetric_doublet if use_doublet
-        else two_half_gaussians
-    )
+    line_function = asymmetric_doublet if use_doublet else two_half_gaussians
+    def fit_function(x, *parameters):
+        return line_function(x, *parameters[:-1]) + parameters[-1]
 
-    Amp = np.full((ny, 2), np.nan)
-    Mu = np.full((ny, 2), np.nan)
+    amp = np.full((ny, 2), np.nan)
+    center = np.full((ny, 2), np.nan)
     sigma_left = np.full((ny, 2), np.nan)
     sigma_right = np.full((ny, 2), np.nan)
+    backgrounds = np.full(ny, np.nan)
+    initial_data = np.where(mask, data, np.nan)
 
     for y in range(ny):
-
-        x_reference = wave[y]
-        profile = _average_neighboring_rows(data, wave, y)
-        if profile is None:
+        valid = mask[y] & np.isfinite(data[y]) & np.isfinite(wave[y])
+        n_parameters = 9 if use_doublet else 5
+        if np.count_nonzero(valid) <= n_parameters:
             continue
-
-        valid = np.isfinite(x_reference) & np.isfinite(profile)
-
-        if np.count_nonzero(valid) < 8:
-            continue
-
-        x = x_reference[valid]
-        flux = profile[valid]
-
-        # Sort by wavelength so the wings follow increasing wavelength.
+        x = wave[y, valid]
+        flux = data[y, valid]
         order = np.argsort(x)
-        x = x[order]
-        flux = flux[order]
+        x, flux = x[order], flux[order]
+        averaged = _average_neighboring_rows(initial_data, wave, y)
+        if averaged is None:
+            initial_flux = flux.copy()
+        else:
+            initial_flux = averaged[valid][order]
+            if not np.all(np.isfinite(initial_flux)):
+                initial_flux = flux.copy()
 
-        # Subtract the median background before fitting the line-only model.
-        background = np.nanmedian(flux)
-        flux = flux - background
-
-        if np.nanmax(flux) <= 0:
-            continue
-
-        wave_min = np.nanmin(x)
-        wave_max = np.nanmax(x)
-
-        # Keep the line center away from the edges of the fitting window.
+        # The median supplies a starting value, never a fixed subtraction:
+        # broad doublet wings can cover more than half of the crop.
+        initial_background = np.median(initial_flux)
+        initial_signal = initial_flux - initial_background
+        wave_min, wave_max = x[0], x[-1]
         center_margin = 2.0 * delta_lambda
-        center_low = wave_min + center_margin
-        center_high = wave_max - center_margin
-
+        center_low, center_high = wave_min + center_margin, wave_max - center_margin
         if center_low >= center_high:
             continue
 
         if not use_doublet:
-            # Single line
-            peak_idx = np.nanargmax(flux)
-
-            amp0 = max(flux[peak_idx], 1e-3)
-            mu0 = np.clip(x[peak_idx], center_low, center_high)
-
-            p0 = [amp0, mu0, sigma0, sigma0]
-            lower_bounds = [0.0, center_low, min_sigma, min_sigma]
-            upper_bounds = [np.inf, center_high, max_sigma, max_sigma]
-
+            peak = np.argmax(initial_signal)
+            p0 = [max(initial_signal[peak], 1e-3),
+                  np.clip(x[peak], center_low, center_high), sigma0, sigma0]
+            lower = [0.0, center_low, min_sigma, min_sigma]
+            upper = [np.inf, center_high, max_sigma, max_sigma]
         else:
-            # Doublet
-            peak1_idx = np.nanargmax(flux)
-            peak1_wave = x[peak1_idx]
-
-            # Exclude pixels near the strongest peak before finding the other peak.
-            flux_masked = flux.copy()
-            suppress = np.abs(x - peak1_wave) < min_separation
-            flux_masked[suppress] = -np.inf
-
-            if not np.any(np.isfinite(flux_masked)):
+            peak1 = np.argmax(initial_signal)
+            remaining = initial_signal.copy()
+            remaining[np.abs(x - x[peak1]) < min_separation] = -np.inf
+            if not np.any(np.isfinite(remaining)):
                 continue
-
-            peak2_idx = np.argmax(flux_masked)
-            # Order the peaks by wavelength.
-            blue_peak, red_peak = sorted((peak1_idx, peak2_idx))
-            mu1_0, mu2_0 = x[[blue_peak, red_peak]]
-            amp1_0 = max(flux[blue_peak], 1e-3)
-            amp2_0 = max(flux[red_peak], 1e-3)
-
-            dmu0 = np.clip(
-                mu2_0 - mu1_0,
-                min_separation,
-                max_separation
-            )
-
-            # Leave room for at least the minimum doublet separation.
+            blue, red = sorted((peak1, np.argmax(remaining)))
             mu1_high = center_high - min_separation
-
             if center_low >= mu1_high:
                 continue
+            p0 = [max(initial_signal[blue], 1e-3),
+                  np.clip(x[blue], center_low, mu1_high), sigma0, sigma0,
+                  max(initial_signal[red], 1e-3),
+                  np.clip(x[red] - x[blue], min_separation, max_separation),
+                  sigma0, sigma0]
+            lower = [0.0, center_low, min_sigma, min_sigma,
+                     0.0, min_separation, min_sigma, min_sigma]
+            upper = [np.inf, mu1_high, max_sigma, max_sigma,
+                     np.inf, max_separation, max_sigma, max_sigma]
 
-            mu1_0 = np.clip(mu1_0, center_low, mu1_high)
-
-            p0 = [
-                amp1_0, mu1_0, sigma0, sigma0,
-                amp2_0, dmu0, sigma0, sigma0,
-            ]
-            lower_bounds = [
-                0.0, center_low, min_sigma, min_sigma,
-                0.0, min_separation, min_sigma, min_sigma,
-            ]
-            upper_bounds = [
-                np.inf, mu1_high, max_sigma, max_sigma,
-                np.inf, max_separation, max_sigma, max_sigma,
-            ]
-
-        # Keep the initial parameters strictly inside the bounds.
-        p0 = np.clip(
-            np.asarray(p0, dtype=float),
-            np.asarray(lower_bounds) + 1e-10,
-            np.asarray(upper_bounds) - 1e-10,
-        )
-
+        initial_line = np.clip(np.asarray(p0), np.asarray(lower) + 1e-10,
+                               np.asarray(upper) - 1e-10)
+        # Limit background/wing degeneracy in faint rows using the low-flux
+        # pixels, while allowing the line-dominated median to be much higher.
+        flux_median = np.median(flux)
+        low_flux = flux[flux <= flux_median]
+        low_scatter = max(np.std(low_flux), np.finfo(float).eps)
+        background_low = np.quantile(flux, 0.2) - 1.5 * low_scatter
+        background_high = flux_median
+        if background_high - background_low <= 1e-8:
+            continue
+        initial_background = np.clip(initial_background,
+                                     background_low + 1e-10,
+                                     background_high - 1e-10)
+        initial_parameters = np.r_[initial_line, initial_background]
+        bounds = ([*lower, background_low], [*upper, background_high])
         try:
-            popt, _ = curve_fit(
-                function_this_line,
-                x,
-                flux,
-                p0=p0,
-                bounds=(lower_bounds, upper_bounds),
-                maxfev=20000,
-            )
+            initial_parameters, _ = curve_fit(
+                fit_function, x, initial_flux, p0=initial_parameters,
+                bounds=bounds, maxfev=20000)
+        except (RuntimeError, ValueError, FloatingPointError):
+            pass
+        try:
+            fitted, _ = curve_fit(
+                fit_function, x, flux, p0=initial_parameters,
+                bounds=bounds, maxfev=20000)
         except (RuntimeError, ValueError, FloatingPointError):
             continue
 
         if not use_doublet:
-            amp, mu, sig_l, sig_r = popt
-
-            Amp[y] = [amp, 0.0]
-            Mu[y] = [mu, np.nan]
-            sigma_left[y] = [sig_l, 0.0]
-            sigma_right[y] = [sig_r, 0.0]
-
+            a, mu, left, right, background = fitted
+            amp[y] = [a, 0.0]
+            center[y] = [mu, np.nan]
+            sigma_left[y] = [left, 0.0]
+            sigma_right[y] = [right, 0.0]
         else:
-            amp1, mu1, sig1_l, sig1_r, amp2, dmu, sig2_l, sig2_r = popt
-
+            a1, mu1, left1, right1, a2, dmu, left2, right2, background = fitted
             mu2 = mu1 + dmu
-
-            # Discard fits whose second peak falls outside the fitting window.
             if mu2 > center_high:
                 continue
+            amp[y] = [a1, a2]
+            center[y] = [mu1, mu2]
+            sigma_left[y] = [left1, left2]
+            sigma_right[y] = [right1, right2]
+        backgrounds[y] = background
 
-            Amp[y] = [amp1, amp2]
-            Mu[y] = [mu1, mu2]
-            sigma_left[y] = [sig1_l, sig2_l]
-            sigma_right[y] = [sig1_r, sig2_r]
-
-    return (
-        Amp,
-        Mu * u.Angstrom,
-        sigma_left * u.Angstrom,
-        sigma_right * u.Angstrom,
-    )
+    result = (amp, center * u.Angstrom,
+              sigma_left * u.Angstrom, sigma_right * u.Angstrom)
+    return (*result, backgrounds) if return_background else result
 
 
 def _reconstruct_profiles(wave, amp, mu, sigma_left, sigma_right, valid_fit):
@@ -310,18 +238,26 @@ def _reconstruct_profiles(wave, amp, mu, sigma_left, sigma_right, valid_fit):
     return restored
 
 
-def _profile_residuals(data, restored, spec_var):
-    """Use the global median background for the diagnostic residuals."""
-    background = np.nanmedian(data)
+def _profile_residuals(data, restored, spec_var, row_background=None):
+    """Subtract the fitted row background, or the legacy global median."""
+    if row_background is None:
+        background = np.nanmedian(data)
+        background_label = f"bkg: {background:.1f} (global)"
+    else:
+        row_background = np.asarray(row_background, dtype=float)
+        if row_background.shape != (data.shape[0],):
+            raise ValueError("row_background must have one value per spatial row")
+        background = row_background[:, None]
+        background_label = "fitted bkg per row"
     residual = (data - background) - restored
     if spec_var is None:
-        return residual, residual, f"Data - bkg - restored\n(bkg: {background:.1f})"
+        return residual, residual, f"Data - bkg - restored\n({background_label})"
 
     valid_var = np.isfinite(spec_var) & (spec_var > 0)
     spec_err = np.full(data.shape, np.nan)
     spec_err[valid_var] = np.sqrt(spec_var[valid_var])
     title = r"(Data - bkg - restored) / $\sqrt{\rm var}$"
-    return residual, residual / spec_err, f"{title}\n(bkg: {background:.1f})"
+    return residual, residual / spec_err, f"{title}\n({background_label})"
 
 
 def plot_lpf_diagnostics(
@@ -333,7 +269,8 @@ def plot_lpf_diagnostics(
         spec_var=None,
         doublets=("O2",),
         filename="test_LPF_A.jpg",
-        plot_with=None, label_of_plot_with=None, plot_with_color='red'
+        plot_with=None, label_of_plot_with=None, plot_with_color='red',
+        row_background=None
     ):
     """Reconstruct line profiles, save diagnostic plots, and return residuals.
 
@@ -348,7 +285,8 @@ def plot_lpf_diagnostics(
     restored : ndarray, shape (ny, nx)
         Reconstructed emission lines without a background.
     residual : ndarray, shape (ny, nx)
-        Data minus the global median background and reconstructed lines.
+        Data minus the fitted row background (or legacy global median)
+        and reconstructed lines.
         The returned residual is in flux units.
     """
     import matplotlib.pyplot as plt
@@ -412,7 +350,7 @@ def plot_lpf_diagnostics(
     if spec_var is not None:
         spec_var = np.where(spec_mask, spec_var, np.nan)
     residual, residual_for_plot, residual_title = _profile_residuals(
-        arr, restored, spec_var
+        arr, restored, spec_var, row_background=row_background
     )
 
     fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True, sharey=True)
