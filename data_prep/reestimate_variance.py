@@ -32,7 +32,10 @@ def reestimate(data_info):
         spec['var'][region] = variance
         spec['mask'][region] = mask
     image = data_info['image']
-    image['var'] = rescale_var(image['data'], image['var_raw'], image['mask'])
+    variance_template = image['var_bkg'] if 'var_bkg' in image else image['var_raw']
+    image['var_bkg'] = rescale_var(image['data'], variance_template, image['mask'])
+    image['var'] = image['var_bkg'] + image['data']
+    image.pop('var_raw', None)
     return data_info
 
 

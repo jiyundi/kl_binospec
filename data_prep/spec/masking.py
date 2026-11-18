@@ -111,6 +111,12 @@ if __name__ == '__main__':
                 out_mask=[sky_wav_min, sky_wav_max]
                 )
         
+        image = data_info['image']
+        if 'var_bkg' not in image:
+            image['var_bkg'] = image['var']
+            image['var'] = image['var_bkg'] + image['data']
+        image.pop('var_raw', None)
+
         with open(f'{pkl_folder_new}pkl/slit_{slit_num:03d}.pkl', "wb") as fo:
             joblib.dump(data_info, fo)
         
@@ -131,11 +137,11 @@ if __name__ == '__main__':
                     meta = spec_data['meta']
                     )
                 )
-        image_data_info = ImageData(data = data_info['image']['data'], 
-                                    mask = data_info['image']['mask'], 
-                                    var  = data_info['image']['var'], 
-                                    var_raw = data_info['image']['var_raw'], 
-                                    meta = data_info['image']['meta'])
+        image_data_info = ImageData(data    = image['data'],
+                                    mask    = image['mask'],
+                                    var     = image['var'],
+                                    var_bkg = image['var_bkg'],
+                                    meta    = image['meta'])
         data_info = RealDataInfo(spec   = specs_data_info_list,
                                  image  = image_data_info,
                                  galaxy = data_info['galaxy'])

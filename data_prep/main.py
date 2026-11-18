@@ -194,7 +194,6 @@ if __name__ == '__main__':
     
     # 6.4) Rescale: ESTIMATE A REASONABLE LEVEL OF IMAGE VARIANCE
     image_var = rescale_var(image_data, image_var_raw, image_mask)
-    image_var = image_var_raw
     
     # 6.5) Update meta image
     meta_image_dic = meta_image(
@@ -205,8 +204,8 @@ if __name__ == '__main__':
     image_data_info = ImageData(
         data     = image_data,
         mask     = image_mask,
-        var      = image_var,
-        var_raw  = image_var_raw,
+        var      = image_var + image_data,
+        var_bkg  = image_var,
         meta     = meta_image_dic
     )
     

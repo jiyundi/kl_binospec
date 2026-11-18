@@ -6,8 +6,8 @@ import numpy as np
 class ImageData:
     data:     np.ndarray
     mask:     np.ndarray
-    var:      np.ndarray
-    var_raw:  np.ndarray
+    var:      np.ndarray  # Total variance including source Poisson noise.
+    var_bkg:  np.ndarray
     meta: dict
 
 

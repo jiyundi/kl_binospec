@@ -236,7 +236,7 @@ if __name__ == "__main__":
                 np.where(mask, flux, np.nan),
                 bkg_is_subtracted=False, 
                 # restore_CCD_flux=True,
-                var_given=var
+                var_given=np.where(mask, var, np.nan)
             )
 
             # mask=False 的位置设置成 NaN，画图时会显示为空白

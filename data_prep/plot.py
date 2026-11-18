@@ -107,7 +107,7 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
             spec_snr = snr_estimate(
                 np.where(spec_mask, spec_data, np.nan),
                 bkg_is_subtracted=False, 
-                var_given=spec_var
+                var_given=np.where(spec_mask, spec_var, np.nan)
             )
             ax1.text(
                 0.98, 0.98, 
@@ -143,11 +143,12 @@ def make_exam_plots(data_info, slit_name, how_cut=None,
         rot_rectangle(ax2, x0slit, y0slit, slitWidth/pixScale, slitLen/pixScale, 
                       (90-slit_LPA)/57.3, colors[i], '-')
         
-        image_var1 = image_data # as a Poisson noise
-        image_var2 = data_info.image.var
-        imageSNR   = solve_snr(image_data[image_mask], 
-                               image_var1[image_mask] + image_var2[image_mask], 
-                               "image")
+        image_var = data_info.image.var
+        imageSNR   = snr_estimate(
+            np.where(image_mask, image_data, np.nan),
+            bkg_is_subtracted=False,
+            var_given=np.where(image_mask, image_var, np.nan)
+        )
         ax2.text(0.98, 0.98, 
                  f'SNR = {imageSNR:.0f}',
                  fontsize=14, ha='right', va='top', **text_style,
