@@ -171,7 +171,7 @@ if __name__ == '__main__':
     weights_data = imaging_data['weights_data']
     weights_wcs  = imaging_data['weights_wcs' ]
     
-    # 6.2) Cutout image to 4'' x 4'' size
+    # 6.2) Cutout image
     image_data, RAlim, DEClim, image_wcs = cutoutimg(
         science_data, science_wcs, objRA, objDEC, img_width, img_height,
         outputWCS=True
@@ -188,7 +188,7 @@ if __name__ == '__main__':
         target_pixel(image_wcs, objRA, objDEC)
     )
     
-    # 6.4) Rescale: ESTIMATE A REASONABLE LEVEL OF IMAGE VARIANCE
+    # 6.4) Rescale: image_var_raw = Gaussian white noise variance
     image_var = rescale_var(image_data, image_var_raw, image_mask)
     
     # 6.5) Update meta image
