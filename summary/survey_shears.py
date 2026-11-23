@@ -1,10 +1,11 @@
-import os
-os.chdir('../')
+# import os
+# os.chdir('../')
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from astropy.io import fits
+from pathlib import Path
 
 from data_prep.image.read_and_cutout import read_subaru_img_wcs, cutoutimg
 
@@ -17,7 +18,7 @@ plt.rcParams.update({
 })
 
 
-def shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcs, 
+def shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcs=None, 
                image_size=None, fig_centerRA=None, fig_centerDEC=None, 
                plot_gt=False, plot_gx=False, savefig=True):
     
@@ -34,11 +35,11 @@ def shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcs,
     )
     
     if plot_gt and plot_gx:
-        fig = plt.figure(figsize=(20, 12), dpi=300)
+        fig = plt.figure(figsize=(20, 12 if wcs is not None else 8), dpi=300)
         plt.subplots_adjust(hspace=0.2, wspace=0.2)
-        gs = fig.add_gridspec(3, 2, 
-                              height_ratios=[2,1,1], 
-                              width_ratios=[1,1])
+        gs = fig.add_gridspec(3 if wcs is not None else 2, 2,
+                              height_ratios=[2, 1, 1] if wcs is not None else [1, 1],
+                              width_ratios=[1, 1])
         
         ax1, ax2, ax3 = _draw_shear_column(fig, gs, col=0, kind='gt', **common_kwargs)
         
@@ -49,35 +50,38 @@ def shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcs,
         _draw_shear_column(fig, gs, col=1, kind='gx', **common_kwargs)
         
         if savefig:
-            plt.savefig("summary/gt_gx_distribution_copy.jpg", dpi=300, bbox_inches='tight')
+            fig.savefig(Path(__file__).resolve().parent / "gt_gx_distribution.jpg",
+                        dpi=300, bbox_inches='tight')
         
         return fig
     
     elif plot_gt:
-        fig = plt.figure(figsize=(8, 16), dpi=300)
+        fig = plt.figure(figsize=(8, 16 if wcs is not None else 10), dpi=300)
         plt.subplots_adjust(hspace=0.2, wspace=0) # h=height
-        gs = fig.add_gridspec(3, 1, 
-                              height_ratios=[3,1,1], 
+        gs = fig.add_gridspec(3 if wcs is not None else 2, 1,
+                              height_ratios=[3,1,1] if wcs is not None else [1,1],
                               width_ratios=[1])
         
         _draw_shear_column(fig, gs, col=0, kind='gt', **common_kwargs)
         
         if savefig:
-            plt.savefig("gt_distribution.jpg", dpi=300, bbox_inches='tight')
+            fig.savefig(Path(__file__).resolve().parent / "gt_distribution.jpg",
+                        dpi=300, bbox_inches='tight')
         
         return fig
     
     else: # plot_gx only
-        fig = plt.figure(figsize=(8, 15), dpi=300)
+        fig = plt.figure(figsize=(8, 15 if wcs is not None else 10), dpi=300)
         plt.subplots_adjust(hspace=0.2, wspace=0) # h=height
-        gs = fig.add_gridspec(3, 1, 
-                              height_ratios=[3,1,1], 
+        gs = fig.add_gridspec(3 if wcs is not None else 2, 1,
+                              height_ratios=[3,1,1] if wcs is not None else [1,1],
                               width_ratios=[1])
         
         _draw_shear_column(fig, gs, col=0, kind='gx', **common_kwargs)
         
         if savefig:
-            plt.savefig("gx_distribution.jpg", dpi=300, bbox_inches='tight')
+            fig.savefig(Path(__file__).resolve().parent / "gx_distribution.jpg",
+                        dpi=300, bbox_inches='tight')
         
         return fig
 
@@ -105,9 +109,10 @@ def _draw_shear_column(fig, gs, col, kind,
             ax3.texts[0].remove()
         
     else:
-        ax1 = fig.add_subplot(gs[0, col], projection=wcs)
-        ax2 = fig.add_subplot(gs[1, col])
-        ax3 = fig.add_subplot(gs[2, col])
+        ax1 = fig.add_subplot(gs[0, col], projection=wcs) if wcs is not None else None
+        offset = 1 if wcs is not None else 0
+        ax2 = fig.add_subplot(gs[offset, col])
+        ax3 = fig.add_subplot(gs[offset + 1, col])
     
     # ax2_ymin, ax2_ymax = ax2.get_ylim()
     ax2_ymin, ax2_ymax = -0.30, 0.43
@@ -233,47 +238,48 @@ def _draw_shear_column(fig, gs, col, kind,
             g1, g1_err, g2, g2_err, \
             gt, gt_err, gx, gx_err = arr_shears[i].astype(float)
         
-        ax1.scatter(RA, DEC, 
-                    marker='o',
-                    s=16, facecolors='none', edgecolors='darkcyan',
-                    transform=ax1.get_transform('world'), zorder=4)
+        if ax1 is not None:
+            ax1.scatter(RA, DEC, 
+                        marker='o',
+                        s=16, facecolors='none', edgecolors='darkcyan',
+                        transform=ax1.get_transform('world'), zorder=4)
         
-        ax1.text(RA-7/3600, DEC+7/3600, int(slitID), 
-                 color='darkcyan', fontsize=8, zorder=5, 
-                 transform=ax1.get_transform('world'))
+            ax1.text(RA-7/3600, DEC+7/3600, int(slitID), 
+                     color='darkcyan', fontsize=8, zorder=5, 
+                     transform=ax1.get_transform('world'))
         
-        ax1.plot([RA,  cluster_centerRA ], 
-                 [DEC, cluster_centerDEC], 
-                 color='darkcyan', ls=':', alpha=0.23, 
-                 transform=ax1.get_transform('world'), zorder=3)
+            ax1.plot([RA,  cluster_centerRA ], 
+                     [DEC, cluster_centerDEC], 
+                     color='darkcyan', ls=':', alpha=0.23, 
+                     transform=ax1.get_transform('world'), zorder=3)
         
-        if kind == 'gt':
-            if gt >= 0: 
-                add_an_arrow(ax1, RA, DEC,  gt*10000, theta_rad+np.pi*1/2, color='firebrick', lw=2, zorder=4)
-                add_an_arrow(ax1, RA, DEC,  gt*10000, theta_rad+np.pi*3/2, color='firebrick', lw=2, zorder=4, text=rf'${gt:.2f}$')
+            if kind == 'gt':
+                if gt >= 0: 
+                    add_an_arrow(ax1, RA, DEC,  gt*10000, theta_rad+np.pi*1/2, color='firebrick', lw=2, zorder=4)
+                    add_an_arrow(ax1, RA, DEC,  gt*10000, theta_rad+np.pi*3/2, color='firebrick', lw=2, zorder=4, text=rf'${gt:.2f}$')
+                else:
+                    add_an_arrow(ax1, RA, DEC, -gt*10000, theta_rad      , color='firebrick', lw=2, zorder=4, text=rf'${gt:.2f}$')
+                    add_an_arrow(ax1, RA, DEC, -gt*10000, theta_rad+np.pi, color='firebrick', lw=2, zorder=4)
+            else: # kind == 'gx'
+                if gx >= 0: 
+                    add_an_arrow(ax1, RA, DEC,  gx*10000, theta_rad+np.pi*1/4, color='mediumblue', lw=2, zorder=4)
+                    add_an_arrow(ax1, RA, DEC,  gx*10000, theta_rad+np.pi*5/4, color='mediumblue', lw=2, zorder=4, text=rf'${gx:.2f}$')
+                else:
+                    add_an_arrow(ax1, RA, DEC, -gx*10000, theta_rad+np.pi*3/4, color='mediumblue', lw=2, zorder=4, text=rf'${gx:.2f}$')
+                    add_an_arrow(ax1, RA, DEC, -gx*10000, theta_rad+np.pi*7/4, color='mediumblue', lw=2, zorder=4)
+        
+            if g1 >= 0: 
+                add_an_arrow(ax1, RA, DEC,  g1*10000,         0, color='thistle', lw=1)
+                add_an_arrow(ax1, RA, DEC,  g1*10000, np.pi*  1, color='thistle', lw=1, text=rf'${g1:.2f}$')
             else:
-                add_an_arrow(ax1, RA, DEC, -gt*10000, theta_rad      , color='firebrick', lw=2, zorder=4, text=rf'${gt:.2f}$')
-                add_an_arrow(ax1, RA, DEC, -gt*10000, theta_rad+np.pi, color='firebrick', lw=2, zorder=4)
-        else: # kind == 'gx'
-            if gx >= 0: 
-                add_an_arrow(ax1, RA, DEC,  gx*10000, theta_rad+np.pi*1/4, color='mediumblue', lw=2, zorder=4)
-                add_an_arrow(ax1, RA, DEC,  gx*10000, theta_rad+np.pi*5/4, color='mediumblue', lw=2, zorder=4, text=rf'${gx:.2f}$')
+                add_an_arrow(ax1, RA, DEC, -g1*10000, np.pi*1/2, color='thistle', lw=1, text=rf'${g1:.2f}$')
+                add_an_arrow(ax1, RA, DEC, -g1*10000, np.pi*3/2, color='thistle', lw=1)
+            if g2 >= 0: 
+                add_an_arrow(ax1, RA, DEC,  g2*10000, np.pi*1/4, color='paleturquoise', lw=1, text=rf'${g2:.2f}$')
+                add_an_arrow(ax1, RA, DEC,  g2*10000, np.pi*5/4, color='paleturquoise', lw=1)
             else:
-                add_an_arrow(ax1, RA, DEC, -gx*10000, theta_rad+np.pi*3/4, color='mediumblue', lw=2, zorder=4, text=rf'${gx:.2f}$')
-                add_an_arrow(ax1, RA, DEC, -gx*10000, theta_rad+np.pi*7/4, color='mediumblue', lw=2, zorder=4)
-        
-        if g1 >= 0: 
-            add_an_arrow(ax1, RA, DEC,  g1*10000,         0, color='thistle', lw=1)
-            add_an_arrow(ax1, RA, DEC,  g1*10000, np.pi*  1, color='thistle', lw=1, text=rf'${g1:.2f}$')
-        else:
-            add_an_arrow(ax1, RA, DEC, -g1*10000, np.pi*1/2, color='thistle', lw=1, text=rf'${g1:.2f}$')
-            add_an_arrow(ax1, RA, DEC, -g1*10000, np.pi*3/2, color='thistle', lw=1)
-        if g2 >= 0: 
-            add_an_arrow(ax1, RA, DEC,  g2*10000, np.pi*1/4, color='paleturquoise', lw=1, text=rf'${g2:.2f}$')
-            add_an_arrow(ax1, RA, DEC,  g2*10000, np.pi*5/4, color='paleturquoise', lw=1)
-        else:
-            add_an_arrow(ax1, RA, DEC, -g2*10000, np.pi*3/4, color='paleturquoise', lw=1, text=rf'${g2:.2f}$')
-            add_an_arrow(ax1, RA, DEC, -g2*10000, np.pi*7/4, color='paleturquoise', lw=1)
+                add_an_arrow(ax1, RA, DEC, -g2*10000, np.pi*3/4, color='paleturquoise', lw=1, text=rf'${g2:.2f}$')
+                add_an_arrow(ax1, RA, DEC, -g2*10000, np.pi*7/4, color='paleturquoise', lw=1)
         
         # Calibrate gt and gx
         d_S  = proper_a_d_distance_calc(z, 70, 0.3)
@@ -444,7 +450,8 @@ def _draw_shear_column(fig, gs, col, kind,
     d_A   = scale_calc(0.1883, 70, 0.3) # kpc/arcsec
     r_500 = R_500 / d_A
     r_200 = r_500 / 0.65
-    c500, c200 = draw_r500_r200(plt, ax1, r_500, r_200, color='limegreen')
+    if ax1 is not None:
+        draw_r500_r200(plt, ax1, r_500, r_200, color='limegreen')
     for ax in (ax2, ax3):
         ax.text(r_500/60+1/8, ax2_ymin+1/50, r'$r_{500,\mathrm{ A383}}$', color='limegreen', fontsize=12, zorder=5)
         ax.text(r_200/60+1/8, ax2_ymin+1/50, r'$r_{200,\mathrm{ A383}}$', color='limegreen', fontsize=12, zorder=5)
@@ -453,17 +460,18 @@ def _draw_shear_column(fig, gs, col, kind,
         ax.vlines(r_200/60, ymin=ax2_ymin, ymax=ax2_ymax, ls=':',  color='limegreen',
                   zorder=0.3)
     
-    if image_size is not None: # image_size must in pixels
+    if ax1 is not None and image_size is not None: # image_size must in pixels
         assert (fig_centerRA is not None) & (fig_centerDEC is not None)
         
         x0, y0 = ax1.wcs.world_to_pixel_values(fig_centerRA, fig_centerDEC)
         ax1.set_xlim(x0-image_size/2, x0+image_size/2)
         ax1.set_ylim(y0-image_size/2, y0+image_size/2)
     
-    ax1.set_xlabel('RA (deg)')
-    ax1.set_ylabel('DEC (deg)')
-    ax1.minorticks_on()
-    ax1.set_aspect(1)
+    if ax1 is not None:
+        ax1.set_xlabel('RA (deg)')
+        ax1.set_ylabel('DEC (deg)')
+        ax1.minorticks_on()
+        ax1.set_aspect(1)
     
     ax2.set_xlim(ax2_xmin, ax2_xmax)
     ax2.set_ylim(ax2_ymin, ax2_ymax)
@@ -555,27 +563,34 @@ def proper_a_d_distance_calc(z, H0, Omega_M):
 
 
 if __name__ == '__main__':
-    img_dir  = '../../RSCH3/HSC_img_A383/'
-    sci_fn_G = 'hlsp_clash_subaru_suprimecam_a383_ip_2005-v20110422_drz.fits'
+    # img_dir  = '../../RSCH3/HSC_img_A383/'
+    # sci_fn_G = 'hlsp_clash_subaru_suprimecam_a383_ip_2005-v20110422_drz.fits'
     spec1d2dfolder02 = '../../RSCH3/UAO-S156-23B-A383/psf/231019/1d2dspecfiles/'
     
     # Read shear catalog
-    df     = pd.read_excel("summary/shear_table.xlsx", header=None, engine='openpyxl')
+    df     = pd.read_excel("shear_table_20261120.xlsx", header=None, engine='openpyxl')
     array  = df.to_numpy()
     
-    # Slits with z & posterior solved & valid but extreme g1/g2
-    g1err1 = np.array(array[2:, 21], dtype=float) # should be -
-    g1err2 = np.array(array[2:, 22], dtype=float) # should be +
-    g2err1 = np.array(array[2:, 25], dtype=float) # should be -
-    g2err2 = np.array(array[2:, 26], dtype=float) # should be +
-    
-    mask_good_g1 = ~np.isnan(g1err1) & (g1err1 < 0) & (g1err2 > 0) & (np.abs(g1err1)<=1e3)
-    mask_good_g2 = ~np.isnan(g2err1) & (g2err1 < 0) & (g2err2 > 0) & (np.abs(g2err1)<=1e3)
+    headers = {name: i for i, name in enumerate(array[1]) if isinstance(name, str)}
+    if all(name in headers for name in ('skyline_status', 'g1_status', 'g2_status', 'fit_status')):
+        mask_good_g1g2 = (
+            (array[2:, headers['skyline_status']] == 'ok') &
+            (array[2:, headers['g1_status']] == 'ok') &
+            (array[2:, headers['g2_status']] == 'ok') &
+            (array[2:, headers['fit_status']] == 'ok'))
+    else:
+        # Older catalogs encoded quality in the error signs and magnitude.
+        g1err1 = np.array(array[2:, 21], dtype=float)
+        g1err2 = np.array(array[2:, 22], dtype=float)
+        g2err1 = np.array(array[2:, 25], dtype=float)
+        g2err2 = np.array(array[2:, 26], dtype=float)
+        mask_good_g1 = ~np.isnan(g1err1) & (g1err1 < 0) & (g1err2 > 0) & (np.abs(g1err1) <= 1e3)
+        mask_good_g2 = ~np.isnan(g2err1) & (g2err1 < 0) & (g2err2 > 0) & (np.abs(g2err1) <= 1e3)
+        mask_good_g1g2 = mask_good_g1 & mask_good_g2
     
     # slits_to_delete = [ 57, 135,  42,  58, 141,  49,  79]
     # mask_deleted = [(num not in slits_to_delete) for num in array[2:, 0].astype(int)]
     
-    mask_good_g1g2  = mask_good_g1 & mask_good_g2 #& mask_deleted
     g_cat_good_g1g2 = array[np.r_[True, True,  mask_good_g1g2]]
     
     cluster_centerRA  =  ( ( 2)+(48)/60+( 3.3)/3600 )*15
@@ -649,18 +664,14 @@ if __name__ == '__main__':
     # Read WCS
     scale = 0.2 # arcsec/pix: 0.2 for image
     image_size = 25 # arcmin
-    img_data_G = read_subaru_img_wcs(img_dir+sci_fn_G, None)
-    imgG, wcsG = img_data_G['science_data'], img_data_G['science_wcs' ]
+    # img_data_G = read_subaru_img_wcs(img_dir+sci_fn_G, None)
+    # imgG, wcsG = img_data_G['science_data'], img_data_G['science_wcs' ]
     
-    # Read mask RA/DEC
-    hdulist01 = fits.open(spec1d2dfolder02+'../obj_abs_slits_extr.fits')
-    slitsInfo01 = np.append(hdulist01[4].data, hdulist01[5].data, axis=0)
-    maskCenterRA, maskCenterDEC = slitsInfo01['MASK_RA'][0], slitsInfo01['MASK_DEC'][0]
-    
-    _, _, _, wcsGc = cutoutimg(
-        imgG, wcsG, maskCenterRA, maskCenterDEC, 
-        img_width=image_size*60/scale, img_height=image_size*60/scale, 
-        outputWCS=True)
+    # _, _, _, wcsGc = cutoutimg(
+    #     imgG, wcsG, maskCenterRA, maskCenterDEC, 
+    #     img_width=image_size*60/scale, img_height=image_size*60/scale, 
+    #     outputWCS=True)
+    wcsGc = None
     
     # tan_shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcsGc, 
     #                image_size*60/scale, maskCenterRA, maskCenterDEC)
@@ -668,6 +679,5 @@ if __name__ == '__main__':
     # cross_shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcsGc, 
     #                  image_size*60/scale, maskCenterRA, maskCenterDEC)
     
-    shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcsGc, 
-               image_size*60/scale, maskCenterRA, maskCenterDEC, 
+    shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcsGc,
                plot_gt=True, plot_gx=True)

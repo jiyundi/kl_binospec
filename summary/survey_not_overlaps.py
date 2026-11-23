@@ -2,22 +2,15 @@ import joblib
 import numpy as np
 
 
-def another_load_mock(pkl_folder='mock/', slit_num=95):
-    with open(f'{pkl_folder}pkl/slit_{slit_num:03d}.pkl', "rb") as f:
-        data_info = joblib.load(f)
-    return data_info
-
-
-def find_not_overlaps(pkl_folder='../scripts/binospec_pkl/'):
+def find_not_overlaps(pkl_folder):
     slitnums  = []
     spec_idxs = []
     not_overlaps = []
     
     for slit_num in range(1, 143):
         try:
-            data_info = another_load_mock(
-                pkl_folder=pkl_folder, 
-                slit_num=slit_num)
+            with open(f'{pkl_folder}pkl/slit_{slit_num:03d}.pkl', "rb") as f:
+                data_info = joblib.load(f)
             
         except FileNotFoundError:
             print( "\033[43m" + 'WARNING:' + "\033[0m " + 

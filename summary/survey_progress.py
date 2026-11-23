@@ -1,5 +1,5 @@
-import os
-os.chdir('../')
+# import os
+# os.chdir('../')
 
 import json
 import yaml
@@ -13,7 +13,7 @@ from astropy.io import fits
 from astropy.visualization import make_lupton_rgb # Creating color RGB images
             
 from data_prep.image.read_and_cutout import read_subaru_img_wcs, cutoutimg
-from data_prep.spec.read_and_cutout  import readinfodat
+# from data_prep.spec.read_and_cutout  import readinfodat
 from core.fitting_result_utils import complete_fit_params
 from core.plot_corner  import read_post
 
@@ -30,23 +30,63 @@ plt.rcParams.update({
 
 
 
-def posterior_to_cat(g_cat, post_dir, ztable, slits_not_finished):
+def posterior_to_cat(g_cat, post_dir, pkl_folder, spec1d2dfolder02, config_filepath, ztable, slits_not_finished=None):
     """
         Generate a shear catalog.
     """
-    slitnums_, spec_idxs_, not_overlaps = find_not_overlaps(
-        pkl_folder='./scripts/binospec_pkl/'
-        )
+    slits_not_finished = set(slits_not_finished or [])
+    slitnums_, _, not_overlaps = find_not_overlaps(pkl_folder)
+    overlap_by_slit = {}
+    for slit, accepted in zip(slitnums_, not_overlaps):
+        overlap_by_slit.setdefault(slit, []).append(accepted)
+
+    # Keep the measurement columns in their existing order.
+    with open(config_filepath, encoding='utf-8') as config_file:
+        shared_params = yaml.safe_load(config_file)['shared_params']
+    parameter_columns = {}
+    for par in shared_params:
+        start = g_cat.shape[1]
+        labels = [par, f'{par}_median', f'{par}_err-', f'{par}_err+']
+        columns = np.full((g_cat.shape[0], 4), np.nan, dtype=object)
+        columns[1] = labels
+        g_cat = np.concatenate((g_cat, columns), axis=1)
+        parameter_columns[par] = start
+    status_columns = {}
+    for label in ('skyline_status', 'g1_status', 'g2_status', 'fit_status', 'quality_note'):
+        status_columns[label] = g_cat.shape[1]
+        column = np.full((g_cat.shape[0], 1), None, dtype=object)
+        column[1, 0] = label
+        g_cat = np.concatenate((g_cat, column), axis=1)
+
+    def set_status(row, label, value):
+        g_cat[row, status_columns[label]] = value
     
     for slit_num in range(1, 143):
+        row = slit_num + 1
+        for label in ('g1_status', 'g2_status'):
+            set_status(row, label, 'unknown')
+        set_status(row, 'fit_status', 'pending')
+        goods_or_bads = overlap_by_slit.get(slit_num, [])
+        if goods_or_bads:
+            skyline_status = ('ok' if np.sum(goods_or_bads) >= 0.5 * len(goods_or_bads)
+                              else 'bad')
+        else:
+            skyline_status = 'unknown'
+        set_status(row, 'skyline_status', skyline_status)
         z_spec = ztable[slit_num, 1]
         
         # Match RA/DEC
         infdatfilename = f'info.829.{slit_num:03d}.{slit_num+100305:06d}.dat'
-        dat_dict       = readinfodat(spec1d2dfolder02 + infdatfilename)
+        dat_dict   = {}
+        with open(spec1d2dfolder02 + infdatfilename) as infile_dat:
+            for sen in infile_dat:
+                if sen[:2] != 'ID':
+                    dat_dict[sen.split('       ')[0]] = float(sen.split('       ')[1][:-1])
         g_cat[slit_num+1, 15:17] = dat_dict['RA'], dat_dict['DEC']
         
         if np.isnan(z_spec)==True:
+            set_status(row, 'fit_status', 'no_redshift')
+            set_status(row, 'quality_note', 'No secure redshift')
             print( "\033[43m" + 'WARNING: ' + "\033[0m " + 
                   f'Slit {slit_num} skipped because no secure redshift found.\n')
             continue
@@ -54,58 +94,47 @@ def posterior_to_cat(g_cat, post_dir, ztable, slits_not_finished):
         elif np.isnan(z_spec)==False:
             # Load pkl
             try:
-                with open(f'{real_pkl_folder}pkl/slit_{slit_num:03d}.pkl', "rb") as f:
+                with open(Path(pkl_folder) / 'pkl' / f'slit_{slit_num:03d}.pkl', "rb") as f:
                     data_info = joblib.load(f)
             except FileNotFoundError: 
+                set_status(row, 'fit_status', 'no_pkl')
+                set_status(row, 'quality_note', 'No pkl file')
                 print( "\033[43m" + 'WARNING: ' + "\033[0m " + 
                       f'Slit {slit_num} skipped because no pkl found.\n')
                 continue
             
             # Check if already solved M_stellar
-            if data_info['galaxy']['log10_Mstar'] is None:
-                # Read M_stellar
-                dg = pd.read_csv(f"{Ms_folder}Mstellar_table.txt", 
-                                 sep=r"\s+", header=0, 
-                                 names=["slit","median","std","err_lo","mean","err_hi"])
-                dg = dg.drop_duplicates(subset="slit", keep="last")
-                Ms = dg.sort_values(by='slit').to_numpy()
-                for row in Ms: 
-                    if row[0]==slit_num: 
-                        log10_Mstar = row[1]
-                        log10_Mstar_err = row[2]
-                        break
-            else:
-                log10_Mstar = data_info['galaxy']['log10_Mstar']
-                log10_Mstar_err = data_info['galaxy']['log10_Mstar_err']
+            log10_Mstar = data_info['galaxy']['log10_Mstar']
+            log10_Mstar_err = data_info['galaxy']['log10_Mstar_err']
             g_cat[slit_num+1, 17:19] = log10_Mstar, log10_Mstar_err
             del log10_Mstar, log10_Mstar_err
             
             if slit_num in slits_not_finished:
-                
-                if slit_num in slitnums_: # spec in sky lines
-                    # assign blank params
-                    select_slit = (np.array(slitnums_) == slit_num)
-                    goods_or_bads = np.array(not_overlaps)[select_slit]
-                    major_specs_accepted = (np.sum(goods_or_bads) >= 0.5 * len(goods_or_bads))
-                    if not major_specs_accepted:
-                        g_cat[slit_num+1, 21] = 1e8
-                        print(f'Slit {slit_num:03d}: major specs are covered by sky lines.')
-                    
+                set_status(row, 'fit_status', 'unfinished')
+                set_status(row, 'quality_note', 'Fitting marked unfinished')
                 print( "\033[43m" + 'WARNING: ' + "\033[0m " + 
                       f'Slit {slit_num} skipped since you specified the fitting is not finished.\n')
                 continue
             
             full_run_dir_1 = f'{post_dir}Slit_{slit_num:03d}/'
             if Path(full_run_dir_1).exists() is False:
+                set_status(row, 'fit_status', 'no_run')
+                set_status(row, 'quality_note', 'Run directory missing')
                 print(f'Slit {slit_num} does not exist.\n')
                 continue
             
             post_path1 = f'{full_run_dir_1}post.txt'
             best_path1 = f'{full_run_dir_1}best_fit.json'
             
+            if not Path(post_path1).is_file():
+                set_status(row, 'fit_status', 'no_posterior')
+                set_status(row, 'quality_note', 'Posterior file missing')
+                print( "\033[45m" + 'WARNING: ' + "\033[0m " + 
+                      f"Slit {slit_num} skipped because {post_path1} not found. \nPerhaps fitting was not completed for this slit? \n")
+                continue
+            
             run_samples1, par_names1, weights1, \
-            loglikes1, samples1, mask1, no_plot1 = read_post(
-                post_path1, percentile=95)
+            loglikes1, samples1, mask1, no_plot1 = read_post(post_path1)
             samples1   = run_samples1[1:, 2:].astype(float)
             
             # Check bad g1/g2, pass posterior txt --> dict
@@ -113,58 +142,57 @@ def posterior_to_cat(g_cat, post_dir, ztable, slits_not_finished):
             for spec in data_info['spec']:
                 alllinespecies.append(spec['meta']['line_species'])
             percentile = analyze_percentile(samples1, 
-                                            "config/binospec_fitting_params.yaml", 
+                                            config_filepath, 
                                             alllinespecies)
             
             if not isinstance(percentile, dict): 
+                set_status(row, 'fit_status', 'config_mismatch')
+                set_status(row, 'quality_note', 'Posterior and configuration mismatch')
                 print( "\033[43m" + 'WARNING:' + "\033[0m " + 
                       f'Slit {slit_num} hint: your run does not match your current pkl or config yaml. Skipped.\n')
                 continue
             
             # Check if specs are overlapped with any sky line masks
-            select_slit = (np.array(slitnums_) == slit_num)
-            goods_or_bads = np.array(not_overlaps)[select_slit]
-            major_specs_accepted = (np.sum(goods_or_bads) >= 0.5 * len(goods_or_bads))
-            if not major_specs_accepted:
+            if skyline_status == 'bad':
                 print(f'Slit {slit_num:03d}: major specs are covered by sky lines.')
-                for key, _ in percentile.items():
-                    percentile[key]['err_hi'] *= 1e8
-                    percentile[key]['err_lo'] *= 1e8
             
             # Add best params into percentile array
-            with open(best_path1, "r") as f:
-                best_par = json.load(f)['maximum_likelihood']['point']
+            try:
+                with open(best_path1, "r") as f:
+                    best_par = json.load(f)['maximum_likelihood']['point']
+            except FileNotFoundError:
+                set_status(row, 'fit_status', 'no_best_fit')
+                set_status(row, 'quality_note', 'Best-fit file missing')
+                continue
+            if not all(key in best_par for key in percentile):
+                set_status(row, 'fit_status', 'config_mismatch')
+                set_status(row, 'quality_note', 'Best-fit parameters and posterior mismatch')
+                continue
             for key, vals in percentile.items():
                 percentile[key]['best'] = best_par[key]
+            for par in ('g1', 'g2'):
+                result = percentile.get(f'shared_params-{par}')
+                if result is not None:
+                    set_status(row, f'{par}_status', result['status'])
             
             # Add more columns to contain posteriors
-            n_rows, n_cols = g_cat.shape
-            for key in list(percentile.keys()):
-                # We only do once in the slit for loop!
-                if n_cols <= 19: 
-                    if key.split('-')[0] == 'shared_params':
-                        par = key.split('-')[1]
-                        g_cat = np.append(
-                            g_cat, 
-                            np.array([
-                                [np.nan, f'{par}']+[np.nan]*(n_rows-2), # col 19
-                                [np.nan, f'{par}_median']+[np.nan]*(n_rows-2), # col 20
-                                [np.nan, f'{par}_err-']+[np.nan]*(n_rows-2), # col 21
-                                [np.nan, f'{par}_err+']+[np.nan]*(n_rows-2), # col 22
-                                ]).T, 
-                            axis=1)
-                
-                # Assign values from posterior
-                par = key.split('-')[1]
-                for j in range(len(g_cat[1])):
-                    head_key = g_cat[1, j]
-                    if par == head_key:
-                        g_cat[slit_num+1, j:j+4] = list([
-                            percentile[key]['best'], 
-                            percentile[key]['median'], # or mean
-                            percentile[key]['err_lo'], 
-                            percentile[key]['err_hi'], 
-                            ])
+            for key, values in percentile.items():
+                if not key.startswith('shared_params-'):
+                    continue
+                par = key.split('-', 1)[1]
+                if par in parameter_columns:
+                    col = parameter_columns[par]
+                    g_cat[slit_num+1, col:col+4] = (
+                        values['best'], values['median'],
+                        values['err_lo'], values['err_hi'])
+            set_status(row, 'fit_status', 'ok')
+            notes = []
+            if skyline_status == 'bad':
+                notes.append('Major spectra affected by sky lines')
+            for par in ('g1', 'g2'):
+                if g_cat[row, status_columns[f'{par}_status']] == 'bad':
+                    notes.append(f'{par} posterior rejected')
+            set_status(row, 'quality_note', '; '.join(notes) or None)
     
             print("\033[42m" + 'INFO:    ' + "\033[0m " + 
                   f'Slit {slit_num} recorded. 👍\n')
@@ -186,33 +214,26 @@ def analyze_percentile(samples, config_filename,
     nparams = len(samples[0])
     arr = np.zeros((nparams, 3))
     
+    if nparams != len(config_param_names):
+        return 'ERROR'
     for j in range(nparams):
+        if j >= len(config_param_names):
+            return 'ERROR'
         samp_points = samples[:,j]
         x123 = np.percentile(samp_points, [16, 50, 84])
         err_lo, median, err_hi = x123[0]-x123[1], x123[1], x123[2]-x123[1]
-        
-        if ('-g1' in config_param_names[j]) or \
-            ('-g2' in config_param_names[j]):
-                
-            is_g_bad = check_g1g2_post(
-                samp_points, pmin=-0.15, pmax=0.15
-                )
-            
+        status = None
+        if config_param_names[j] in ('shared_params-g1', 'shared_params-g2'):
+            is_g_bad = check_g1g2_post(samp_points, pmin=-0.15, pmax=0.15)
+            status = 'bad' if is_g_bad else 'ok'
             if is_g_bad:
-                # flip signs of low/high errors on purpose
-                err_lo *= -1
-                err_hi *= -1
                 print(f'Bad shear detected: {config_param_names[j]}')
         
         arr[j] = np.around([median, err_lo, err_hi], decimals=4)
         
-        try:
-            dic_percent[config_param_names[j]] = {'median': arr[j,0], 
-                                                  'err_lo': arr[j,1], 
-                                                  'err_hi': arr[j,2]}
-        except IndexError:
-            dic_percent = 'ERROR'
-            break
+        dic_percent[config_param_names[j]] = {
+            'median': arr[j, 0], 'err_lo': arr[j, 1],
+            'err_hi': arr[j, 2], 'status': status}
 
     return dic_percent
 
@@ -309,41 +330,26 @@ def slit_design_plot(g_cat, maskCenterRA, maskCenterDEC, imgR, imgG, imgB, wcs,
     g_cat_return['g_cat_no_z'] = g_cat_no_z
     print(f'No secure z ({len(g_cat_no_z[2:, 0])}): {g_cat_no_z[2:, 0]}')
     
-    # (2) Slits with z BUT sky lines ON TOP
-    g1_errs = np.array(g_cat_secure[2:, 21], dtype=float)
-    g_cat_sky = g_cat_secure[np.r_[True, True,  (np.abs(g1_errs)>1e3)]]
-    g_cat_OK  = g_cat_secure[np.r_[True, True, ~(np.abs(g1_errs)>1e3)]]
+    # (2) Slits whose major spectra are affected by sky lines
+    headers = {name: col for col, name in enumerate(g_cat[1]) if isinstance(name, str)}
+    skyline_status = g_cat_secure[2:, headers['skyline_status']]
+    g_cat_sky = g_cat_secure[np.r_[True, True, skyline_status == 'bad']]
+    g_cat_OK = g_cat_secure[np.r_[True, True, skyline_status != 'bad']]
     g_cat_return['g_cat_fail'] = g_cat_sky
     print(f'Sky lines ({len(g_cat_sky[2:, 0])}): {g_cat_sky[2:, 0]}')
     
-    # # (3) Slits with z & no sky lines BUT not yet solve posterior (FAILED)
-    # g1_arr = np.array(g_cat_secure[2:, 19], dtype=float)
-    # tbd    = np.isnan(g1_arr)
-    # if slits_not_finished is not None:
-    #     tbd = np.isnan(g1_arr) | np.isin(g_cat_secure[2:, 0], np.array(slits_not_finished))
-    # g_cat_solved = g_cat_secure[np.r_[True, True, ~tbd]]
-    # g_cat_tbd    = g_cat_secure[np.r_[True, True,  tbd]]
-    # g_cat_return['g_cat_tbd'] = g_cat_tbd
-    # print(f'Not finished ({len(g_cat_tbd[2:, 0])}): {g_cat_tbd[2:, 0]}')
-    
-    # # (3) Slits with z & posterior solved but not valid
-    # g1_errs = np.array(g_cat_solved[2:, 21], dtype=float)
-    # g_cat_fail  = g_cat_solved[np.r_[True, True,  np.isnan(g1_errs)]]
-    # g_cat_valid = g_cat_solved[np.r_[True, True, ~np.isnan(g1_errs)]]
-    # g_cat_return['g_cat_fail'] = g_cat_fail
-    # print(f'Failed ({len(g_cat_fail[2:, 0])}): {g_cat_fail[2:, 0]}')
-    
-    # (5) Slits with z & posterior solved & valid & sky lines FREE but BAD g1/g2
-    g1err1 = np.array(g_cat_OK[2:, 21], dtype=float) # should be -
-    g1err2 = np.array(g_cat_OK[2:, 22], dtype=float) # should be +
-    g2err1 = np.array(g_cat_OK[2:, 25], dtype=float) # should be -
-    g2err2 = np.array(g_cat_OK[2:, 26], dtype=float) # should be +
-    
-    mask_good_g1 = (g1err1 < 0) & (g1err2 > 0)
-    mask_good_g2 = (g2err1 < 0) & (g2err2 > 0)
-    mask_good_g1g2  = mask_good_g1 & mask_good_g2
-    g_cat_good_g1g2 = g_cat_OK[np.r_[True, True,  mask_good_g1g2]]
-    g_cat_bad_g1g2  = g_cat_OK[np.r_[True, True, ~mask_good_g1g2]]
+    # (3) Separate unfinished fits from evaluated shear posteriors.
+    fit_status = g_cat_OK[2:, headers['fit_status']]
+    g_cat_tbd = g_cat_OK[np.r_[True, True, fit_status != 'ok']]
+    g_cat_solved = g_cat_OK[np.r_[True, True, fit_status == 'ok']]
+    g_cat_return['g_cat_tbd'] = g_cat_tbd
+    print(f'Not finished ({len(g_cat_tbd[2:, 0])}): {g_cat_tbd[2:, 0]}')
+
+    # (4) Classify evaluated g1/g2 directly from their quality flags.
+    mask_good_g1g2 = ((g_cat_solved[2:, headers['g1_status']] == 'ok') &
+                      (g_cat_solved[2:, headers['g2_status']] == 'ok'))
+    g_cat_good_g1g2 = g_cat_solved[np.r_[True, True, mask_good_g1g2]]
+    g_cat_bad_g1g2 = g_cat_solved[np.r_[True, True, ~mask_good_g1g2]]
     g_cat_return['g_cat_good_g1g2'] = g_cat_good_g1g2
     g_cat_return['g_cat_bad_g1g2' ] = g_cat_bad_g1g2
     print(f'Bad g1g2 ({len(g_cat_bad_g1g2[2:, 0])}): {g_cat_bad_g1g2[2:, 0]}')
@@ -361,6 +367,11 @@ def slit_design_plot(g_cat, maskCenterRA, maskCenterDEC, imgR, imgG, imgB, wcs,
                 f'({len(g_cat_sky[2:, 15])})', 
                 marker='o',
                 s=20, facecolors='gray', edgecolors='purple', 
+                transform=ax1.get_transform('world'), zorder=4)
+    ax1.scatter(g_cat_tbd[2:, 15],
+                g_cat_tbd[2:, 16],
+                label=f'Fitting incomplete ({len(g_cat_tbd[2:, 15])})',
+                marker='s', s=25, facecolors='none', edgecolors='orange',
                 transform=ax1.get_transform('world'), zorder=4)
     ax1.scatter(g_cat_bad_g1g2[2:, 15], 
                 g_cat_bad_g1g2[2:, 16], 
@@ -462,11 +473,18 @@ def slit_design_plot(g_cat, maskCenterRA, maskCenterDEC, imgR, imgG, imgB, wcs,
 
 
 if __name__ == '__main__':
+    z_table_filename = "../scripts/redshift_table.xlsx"
+    real_pkl_folder  = '../scripts/binospec_pkl_new/'
+    Ms_folder        = '../../bagpipes-KL/'
+    spec1d2dfolder02 = '../../RSCH3/UAO-S156-23B-A383/psf/231019/1d2dspecfiles_counts/'
+    new_filename     = "shear_table_20261120.xlsx"
+    base_dir         = '../scripts/' # f'../../RSCH3/HPC_database/runs_{date_of_run}/'
+    config_filepath  = '../config/binospec_fitting_params.yaml'
+    
     # If any, specify slits that were not finished
-    slits_not_finished = [15, 24, 45, 63, 109, 112, 116, 122, 129]
+    slits_not_finished = []
     
     # Redshifts
-    z_table_filename = "./scripts/redshift_table.xlsx"
     df     = pd.read_excel(z_table_filename, header=None, engine='openpyxl')
     array  = df.to_numpy()
     ztable = array[1:, 0:2] # remove 1st line header, keep 1 remaining
@@ -482,63 +500,61 @@ if __name__ == '__main__':
                                 ]).T, 
                       axis=1)
     
-    real_pkl_folder  = './scripts/binospec_pkl/'
-    Ms_folder        =  '../bagpipes-KL/'
-    spec1d2dfolder02 = '../../RSCH3/UAO-S156-23B-A383/psf/231019/1d2dspecfiles/'
     
-    date_of_run = str(input('Please enter the data of run: '))
+    # date_of_run = str(input('Please enter the data of run: '))
     # date_of_run = '20260601'
-    base_dir = f'../../RSCH3/HPC_database/runs_{date_of_run}/'
-    g_cat = posterior_to_cat(g_cat, base_dir, ztable, 
+    g_cat = posterior_to_cat(g_cat, base_dir, real_pkl_folder, spec1d2dfolder02, config_filepath, ztable, 
                              slits_not_finished)
     
     # Save shear catalog
     from openpyxl import load_workbook
-    new_filename = "summary/shear_table.xlsx"
     wb = load_workbook(z_table_filename)
     ws = wb.active # or, wb["Sheet1"]
     n_old_cols, n_rows = ws.max_column, ws.max_row
     new_cols = g_cat[:, n_old_cols:]
-    new_cols = np.where(new_cols == 'nan', None, new_cols)
-    for i in range(n_rows):
+    for i in range(min(n_rows, new_cols.shape[0])):
         for j in range(new_cols.shape[1]):
-            ws.cell(row=i+1, column=n_old_cols + j + 1,
-                    value=new_cols[i, j])
+            value = new_cols[i, j]
+            if pd.isna(value):
+                value = None
+            elif isinstance(value, np.generic):
+                value = value.item()
+            ws.cell(row=i+1, column=n_old_cols + j + 1, value=value)
     wb.save(new_filename)
     
-    print('Finished reading shear catalog. Plotting...')
+    # print('Finished reading shear catalog. Plotting...')
     
-    img_dir  = '../../RSCH3/HSC_img_A383/'
-    sci_fn_R = 'hlsp_clash_subaru_suprimecam_a383_z_2010-2002-v20110405_drz.fits'
-    sci_fn_G = 'hlsp_clash_subaru_suprimecam_a383_ip_2005-v20110422_drz.fits'
-    # sci_fn_G = 'hlsp_clash_subaru_suprimecam_a383_ic_2002-v20110405_drz.fits'
-    sci_fn_B = 'hlsp_clash_subaru_suprimecam_a383_v_2002-2005-2008-v20110405_drz.fits'
-    # sci_fn_B = 'hlsp_clash_subaru_suprimecam_a383_rc_2002-2007-2008-v20110405_drz.fits'
+    # img_dir  = '../../RSCH3/HSC_img_A383/'
+    # sci_fn_R = 'hlsp_clash_subaru_suprimecam_a383_z_2010-2002-v20110405_drz.fits'
+    # sci_fn_G = 'hlsp_clash_subaru_suprimecam_a383_ip_2005-v20110422_drz.fits'
+    # # sci_fn_G = 'hlsp_clash_subaru_suprimecam_a383_ic_2002-v20110405_drz.fits'
+    # sci_fn_B = 'hlsp_clash_subaru_suprimecam_a383_v_2002-2005-2008-v20110405_drz.fits'
+    # # sci_fn_B = 'hlsp_clash_subaru_suprimecam_a383_rc_2002-2007-2008-v20110405_drz.fits'
     
-    img_data_R = read_subaru_img_wcs(img_dir+sci_fn_R, None)
-    img_data_G = read_subaru_img_wcs(img_dir+sci_fn_G, None)
-    img_data_B = read_subaru_img_wcs(img_dir+sci_fn_B, None)
-    imgR, wcsR = img_data_R['science_data'], img_data_R['science_wcs' ]
-    imgG, wcsG = img_data_G['science_data'], img_data_G['science_wcs' ]
-    imgB, wcsB = img_data_B['science_data'], img_data_B['science_wcs' ]
+    # img_data_R = read_subaru_img_wcs(img_dir+sci_fn_R, None)
+    # img_data_G = read_subaru_img_wcs(img_dir+sci_fn_G, None)
+    # img_data_B = read_subaru_img_wcs(img_dir+sci_fn_B, None)
+    # imgR, wcsR = img_data_R['science_data'], img_data_R['science_wcs' ]
+    # imgG, wcsG = img_data_G['science_data'], img_data_G['science_wcs' ]
+    # imgB, wcsB = img_data_B['science_data'], img_data_B['science_wcs' ]
     
-    hdulist01 = fits.open(spec1d2dfolder02+'../obj_abs_slits_extr.fits')
-    slitsInfo01 = np.append(hdulist01[4].data, hdulist01[5].data, axis=0)
-    maskCenterRA, maskCenterDEC = slitsInfo01['MASK_RA'][0], slitsInfo01['MASK_DEC'][0]
+    # hdulist01 = fits.open(spec1d2dfolder02+'../obj_abs_slits_extr.fits')
+    # slitsInfo01 = np.append(hdulist01[4].data, hdulist01[5].data, axis=0)
+    # maskCenterRA, maskCenterDEC = slitsInfo01['MASK_RA'][0], slitsInfo01['MASK_DEC'][0]
     
-    scale = 0.2 # arcsec/pix: 0.2 for HSC image
-    imgRc, RAlim, DEClim,       = cutoutimg(
-        imgR, wcsR, maskCenterRA, maskCenterDEC, 
-        img_width=(25)*60/scale, img_height=(25)*60/scale)
-    imgGc, RAlim, DEClim, wcsGc = cutoutimg(
-        imgG, wcsG, maskCenterRA, maskCenterDEC, 
-        img_width=(25)*60/scale, img_height=(25)*60/scale, outputWCS=True)
-    imgBc, RAlim, DEClim,       = cutoutimg(
-        imgB, wcsB, maskCenterRA, maskCenterDEC, 
-        img_width=(25)*60/scale, img_height=(25)*60/scale)
+    # scale = 0.2 # arcsec/pix: 0.2 for HSC image
+    # imgRc, RAlim, DEClim,       = cutoutimg(
+    #     imgR, wcsR, maskCenterRA, maskCenterDEC, 
+    #     img_width=(25)*60/scale, img_height=(25)*60/scale)
+    # imgGc, RAlim, DEClim, wcsGc = cutoutimg(
+    #     imgG, wcsG, maskCenterRA, maskCenterDEC, 
+    #     img_width=(25)*60/scale, img_height=(25)*60/scale, outputWCS=True)
+    # imgBc, RAlim, DEClim,       = cutoutimg(
+    #     imgB, wcsB, maskCenterRA, maskCenterDEC, 
+    #     img_width=(25)*60/scale, img_height=(25)*60/scale)
     
-    g_cats = slit_design_plot(g_cat, 
-                              maskCenterRA, maskCenterDEC, 
-                              imgRc*0.01, imgGc*0.01, imgBc*0.004, wcsGc, 
-                              slits_not_finished)
+    # g_cats = slit_design_plot(g_cat, 
+    #                           maskCenterRA, maskCenterDEC, 
+    #                           imgRc*0.01, imgGc*0.01, imgBc*0.004, wcsGc, 
+    #                           slits_not_finished)
     print('Done.')
