@@ -5,11 +5,69 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from astropy.io import fits
+from astropy.cosmology import FlatLambdaCDM
 from pathlib import Path
+from scipy.integrate import cumulative_trapezoid
+from scipy.stats import gaussian_kde
 
 from data_prep.image.read_and_cutout import read_subaru_img_wcs, cutoutimg
 
 from klm.safe_plot import setup; setup() # must before plt
+
+COSMO = FlatLambdaCDM(H0=70, Om0=0.3)
+
+
+def lensing_efficiency(z_lens, z_source):
+    """D_A(lens, source) / D_A(observer, source) in a flat cosmology."""
+    if not np.isfinite(z_source) or z_source <= z_lens:
+        raise ValueError(f'Source redshift {z_source} must exceed lens redshift {z_lens}')
+    return (COSMO.angular_diameter_distance_z1z2(z_lens, z_source) /
+            COSMO.angular_diameter_distance(z_source)).value
+
+
+def weighted_quantiles(values, weights):
+    order = np.argsort(values)
+    values, weights = values[order], weights[order]
+    cdf = (np.cumsum(weights) - 0.5 * weights) / np.sum(weights)
+    return np.interp([0.158655, 0.5, 0.841345], cdf, values)
+
+
+def read_shear_posterior(path):
+    with open(path, encoding='utf-8') as source:
+        names = source.readline().split()
+    columns = [names.index(name) for name in ('weight', 'shared_params-g1', 'shared_params-g2')]
+    data = np.loadtxt(path, skiprows=1, usecols=columns, ndmin=2)
+    weights, g1, g2 = data.T
+    valid = np.isfinite(weights) & (weights > 0) & np.isfinite(g1) & np.isfinite(g2)
+    if valid.sum() < 3:
+        raise ValueError(f'{path}: too few valid weighted shear samples')
+    return weights[valid], g1[valid], g2[valid]
+
+
+def transformed_shear(weights, g1, g2, theta, factor):
+    cos2, sin2 = np.cos(2 * theta), np.sin(2 * theta)
+    return weights, -factor * (g1 * cos2 + g2 * sin2), factor * (g1 * sin2 - g2 * cos2)
+
+
+def geometric_mean_posterior_quantiles(samples_and_weights):
+    """Quantiles of the normalized geometric mean of slit posteriors."""
+    values = np.concatenate([values for values, _ in samples_and_weights])
+    low, high = np.min(values), np.max(values)
+    if not high > low:
+        raise ValueError('Posterior samples have no finite range')
+    padding = 0.05 * (high - low)
+    grid = np.linspace(low - padding, high + padding, 1001)
+    log_density = np.zeros_like(grid)
+    for slit_values, weights in samples_and_weights:
+        log_density += gaussian_kde(slit_values, weights=weights).logpdf(grid)
+    log_density /= len(samples_and_weights)
+    density = np.exp(log_density - np.max(log_density))
+    cdf = cumulative_trapezoid(density, grid, initial=0)
+    if not np.isfinite(cdf[-1]) or cdf[-1] <= 0:
+        raise ValueError('Combined posterior cannot be normalized')
+    return np.interp([0.158655, 0.5, 0.841345], cdf / cdf[-1], grid)
+
+
 plt.style.use('default')
 plt.rcParams.update({
     "font.family": "sans-serif",
@@ -20,7 +78,7 @@ plt.rcParams.update({
 
 def shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcs=None, 
                image_size=None, fig_centerRA=None, fig_centerDEC=None, 
-               plot_gt=False, plot_gx=False, savefig=True):
+               plot_gt=False, plot_gx=False, savefig=True, posterior_by_slit=None):
     
     assert (plot_gt or plot_gx)
     
@@ -32,6 +90,7 @@ def shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcs=None,
         image_size=image_size, 
         fig_centerRA=fig_centerRA, 
         fig_centerDEC=fig_centerDEC, 
+        posterior_by_slit=posterior_by_slit,
     )
     
     if plot_gt and plot_gx:
@@ -89,7 +148,8 @@ def shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcs=None,
 def _draw_shear_column(fig, gs, col, kind, 
                        arr_shears, cluster_centerRA, cluster_centerDEC, wcs, 
                        share_axs=None, 
-                       image_size=None, fig_centerRA=None, fig_centerDEC=None):
+                       image_size=None, fig_centerRA=None, fig_centerDEC=None,
+                       posterior_by_slit=None):
     assert kind in ('gt', 'gx')
     
     if kind == 'gt':
@@ -196,15 +256,12 @@ def _draw_shear_column(fig, gs, col, kind,
         P24_Rs     = np.array([ 1.60 ,  5.05 ,  0.55 ])
         P24_gts    = np.array([ 0.208,  0.041,  0.144])
         P24_gterrs = np.array([ 0.020,  0.038,  0.030])
-        P24_d_L    = proper_a_d_distance_calc(0.224, 70, 0.3)
         U14_beta_2261 = U14_beta_avg # 0.70
         
         # Calibrate gt and gx
         P24_facs = np.array([])
         for i in range(len(P24_gts)):
-            d_S  = proper_a_d_distance_calc(P24_zs[i], 70, 0.3)
-            d_LS = d_S - P24_d_L
-            beta = d_LS / d_S
+            beta = lensing_efficiency(0.224, P24_zs[i])
             fac  = U14_beta_2261 / beta
             P24_facs = np.append(P24_facs, fac)
         
@@ -231,8 +288,8 @@ def _draw_shear_column(fig, gs, col, kind,
                         zorder=0.75)
         
     # In this work...
-    d_L  = proper_a_d_distance_calc(0.1883, 70, 0.3)
     Rs, betas, facs, gts, gt_errs, gxs, gx_errs = [], [], [], [], [], [], []
+    transformed_posteriors = []
     for i in range(1, len(arr_shears)):
         slitID, z, RA, DEC, R, theta_rad, \
             g1, g1_err, g2, g2_err, \
@@ -282,14 +339,16 @@ def _draw_shear_column(fig, gs, col, kind,
                 add_an_arrow(ax1, RA, DEC, -g2*10000, np.pi*7/4, color='paleturquoise', lw=1)
         
         # Calibrate gt and gx
-        d_S  = proper_a_d_distance_calc(z, 70, 0.3)
-        d_LS = d_S - d_L
-        beta = d_LS / d_S
+        beta = lensing_efficiency(0.1883, z)
         fac  = U14_beta_avg / beta
         
         Rs.append(R); betas.append(beta); facs.append(fac)
         gts.append(gt * fac); gt_errs.append(gt_err * fac)
         gxs.append(gx * fac); gx_errs.append(gx_err * fac)
+        if posterior_by_slit is not None:
+            weights, g1_samples, g2_samples = posterior_by_slit[int(slitID)]
+            transformed_posteriors.append(
+                transformed_shear(weights, g1_samples, g2_samples, theta_rad, fac))
         
         # add texts
         y_val = gt * fac if kind == 'gt' else gx * fac
@@ -346,14 +405,16 @@ def _draw_shear_column(fig, gs, col, kind,
         groups[f'{r_low}'] = []
     
     # count gt/gx in bins
-    for r, gt, gt_err, gx, gx_err \
-        in zip(Rs, gts, gt_errs, gxs, gx_errs):
+    for i, (r, gt, gt_err, gx, gx_err) in enumerate(zip(Rs, gts, gt_errs, gxs, gx_errs)):
         r_low = int(r // binsize) * binsize
-        groups[f'{r_low}'].append((gt, gt_err, gx, gx_err))
+        posterior = transformed_posteriors[i] if posterior_by_slit is not None else None
+        groups[f'{r_low}'].append((gt, gt_err, gx, gx_err, posterior))
     
     # calculate binned average
     binned_R_lows, binned_Nslits, binned_yvals, binned_yerrs = [], [], [], []
+    binned_yerrs_lo, binned_yerrs_hi = [], []
     binned_gts, binned_gterrs, binned_gxs, binned_gxerrs = [], [], [], []
+    binned_rows = []
     sorted_keys = sorted(groups.keys(), key=lambda x: float(x))
     for r_low in sorted_keys:
         vals_and_errs = groups[r_low]
@@ -361,18 +422,40 @@ def _draw_shear_column(fig, gs, col, kind,
         gterrs = np.array([v[1] for v in vals_and_errs])
         gxs    = np.array([v[2] for v in vals_and_errs])
         gxerrs = np.array([v[3] for v in vals_and_errs])
-        gt_weights  = 1 / gterrs**2
-        gx_weights  = 1 / gxerrs**2
-        gt_avg  = np.average(gts, weights=gt_weights)
-        gx_avg  = np.average(gxs, weights=gx_weights)
-        gterr_avg  = (np.sum(gt_weights))**(-0.5)
-        gxerr_avg  = (np.sum(gx_weights))**(-0.5)
+        if posterior_by_slit is None:
+            gt_weights = 1 / gterrs**2
+            gx_weights = 1 / gxerrs**2
+            gt_avg = np.average(gts, weights=gt_weights)
+            gx_avg = np.average(gxs, weights=gx_weights)
+            gterr_avg = np.sum(gt_weights)**(-0.5)
+            gxerr_avg = np.sum(gx_weights)**(-0.5)
+            gt_q = [gt_avg - gterr_avg, gt_avg, gt_avg + gterr_avg]
+            gx_q = [gx_avg - gxerr_avg, gx_avg, gx_avg + gxerr_avg]
+        else:
+            gt_q = geometric_mean_posterior_quantiles([(v[4][1], v[4][0]) for v in vals_and_errs])
+            gx_q = geometric_mean_posterior_quantiles([(v[4][2], v[4][0]) for v in vals_and_errs])
+            gt_avg, gx_avg = gt_q[1], gx_q[1]
+            gterr_avg = 0.5 * (gt_q[2] - gt_q[0])
+            gxerr_avg = 0.5 * (gx_q[2] - gx_q[0])
         val_avg, err_avg = (gt_avg, gterr_avg) if kind == 'gt' else (gx_avg, gxerr_avg)
+        q = gt_q if kind == 'gt' else gx_q
         
         binned_R_lows.append(int(r_low)); binned_Nslits.append(len(gts))
         binned_yvals.append(val_avg); binned_yerrs.append(err_avg)
+        binned_yerrs_lo.append(q[1] - q[0]); binned_yerrs_hi.append(q[2] - q[1])
         binned_gts.append(gt_avg); binned_gterrs.append(gterr_avg)
         binned_gxs.append(gx_avg); binned_gxerrs.append(gxerr_avg)
+        binned_rows.append({
+            'radius_low_arcmin': int(r_low), 'radius_high_arcmin': int(r_low) + binsize,
+            'n_slits': len(gts),
+            'gt_median': gt_q[1], 'gt_err_minus': gt_q[1] - gt_q[0],
+            'gt_err_plus': gt_q[2] - gt_q[1],
+            'gx_median': gx_q[1], 'gx_err_minus': gx_q[1] - gx_q[0],
+            'gx_err_plus': gx_q[2] - gx_q[1],
+        })
+    if posterior_by_slit is not None and (kind == 'gt' or share_axs is None):
+        pd.DataFrame(binned_rows).to_csv(
+            Path(__file__).resolve().parent / 'binned_shears.csv', index=False)
     
     # y_vals = gts    if kind == 'gt' else gxs
     # y_errs = gt_err if kind == 'gt' else gx_err
@@ -380,7 +463,7 @@ def _draw_shear_column(fig, gs, col, kind,
     # va = 'bottom' if kind == 'gt' else 'top'
     ax3.errorbar(np.array(binned_R_lows)+binsize/2, 
                  np.array(binned_yvals), 
-                 yerr=np.array(binned_yerrs), 
+                 yerr=np.array([binned_yerrs_lo, binned_yerrs_hi]), 
                  fmt='', capsize=5, capthick=1.5, elinewidth=1.5, 
                  ecolor=main_color, marker=marker, markersize=4, 
                  markerfacecolor='white', markeredgecolor=main_color, 
@@ -597,24 +680,26 @@ if __name__ == '__main__':
     cluster_centerDEC = -( ( 3)+(31)/60+(46.4)/3600 )
     
     columns    = ['slitID', 'z', 'RA', 'DEC', 'radius', 'theta_rad', 
-                  'g1_best', 'g1_err', 'g2_best', 'g2_err', 
+                  'g1_median', 'g1_err', 'g2_median', 'g2_err', 
                   'gt',      'gt_err', 'gx',      'gx_err']
     arr_shears = np.zeros((1, len(columns))).astype(str)
     arr_shears[0] = np.array(columns)
+    posterior_by_slit = {}
     
     for i in range(len(g_cat_good_g1g2[2:, 0])):
         # Calculate galaxy's position angle w.r.t. CLUSTER CENTER
         slit_id = g_cat_good_g1g2[2+i,  0]
         z       = np.nanmean(g_cat_good_g1g2[2+i, [5, 8, 11]])
         RA, DEC = g_cat_good_g1g2[2+i, 15], g_cat_good_g1g2[2+i, 16]
-        g1, g2  = g_cat_good_g1g2[2+i, 20], g_cat_good_g1g2[2+i, 24]
-        g1_err_nega, g1_err_posi = g_cat_good_g1g2[2+i, 21], g_cat_good_g1g2[2+i, 22]
-        g2_err_nega, g2_err_posi = g_cat_good_g1g2[2+i, 25], g_cat_good_g1g2[2+i, 26]
-        
-        # Error propagation
-        g1_err = 0.5 * (g1_err_posi - g1_err_nega)
-        g2_err = 0.5 * (g2_err_posi - g2_err_nega)
-        assert (g1_err > 0) & (g2_err > 0)
+        post_path = (Path(__file__).resolve().parent.parent / 'scripts' /
+                     f'Slit_{int(slit_id):03d}' / 'post.txt')
+        weights, g1_samples, g2_samples = read_shear_posterior(post_path)
+        posterior_by_slit[int(slit_id)] = (weights, g1_samples, g2_samples)
+        g1_q = weighted_quantiles(g1_samples, weights)
+        g2_q = weighted_quantiles(g2_samples, weights)
+        g1, g2 = g1_q[1], g2_q[1]
+        g1_err = 0.5 * (g1_q[2] - g1_q[0])
+        g2_err = 0.5 * (g2_q[2] - g2_q[0])
         
         # Polar coordinates
         R = 60 * np.sqrt((RA - cluster_centerRA)**2 + 
@@ -622,16 +707,13 @@ if __name__ == '__main__':
         theta_cl_rad = np.arctan2(DEC - cluster_centerDEC, 
                                   RA  - cluster_centerRA)
         
-        # Calculate tangential shear g+ by using Pranjal+22
-        gt = -(g1 * np.cos(2*theta_cl_rad) + g2 * np.sin(2*theta_cl_rad))
-        gx =  (g1 * np.sin(2*theta_cl_rad) - g2 * np.cos(2*theta_cl_rad))
-        
-        # σ^​2(g+) ​= (cos2ϕ)^2 σ^2(g1) ​+ (sin2ϕ)^2 σ^2(g2)
-        # σ^​2(gx) ​= (sin2ϕ)^2 σ^2(g1) ​+ (cos2ϕ)^2 σ^2(g2)
-        gt_err = (np.cos(2*theta_cl_rad)**2 * g1_err**2 + 
-                  np.sin(2*theta_cl_rad)**2 * g2_err**2 )**0.5
-        gx_err = (np.sin(2*theta_cl_rad)**2 * g1_err**2 + 
-                  np.cos(2*theta_cl_rad)**2 * g2_err**2 )**0.5
+        _, gt_samples, gx_samples = transformed_shear(
+            weights, g1_samples, g2_samples, theta_cl_rad, 1.0)
+        gt_q = weighted_quantiles(gt_samples, weights)
+        gx_q = weighted_quantiles(gx_samples, weights)
+        gt, gx = gt_q[1], gx_q[1]
+        gt_err = 0.5 * (gt_q[2] - gt_q[0])
+        gx_err = 0.5 * (gx_q[2] - gx_q[0])
         
         arr_shears = np.append(arr_shears, 
                                [[slit_id, z, RA, DEC, R, theta_cl_rad, 
@@ -680,4 +762,4 @@ if __name__ == '__main__':
     #                  image_size*60/scale, maskCenterRA, maskCenterDEC)
     
     shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcsGc,
-               plot_gt=True, plot_gx=True)
+               plot_gt=True, plot_gx=True, posterior_by_slit=posterior_by_slit)

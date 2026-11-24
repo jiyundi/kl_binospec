@@ -184,7 +184,8 @@ def posterior_to_cat(g_cat, post_dir, pkl_folder, spec1d2dfolder02, config_filep
                     col = parameter_columns[par]
                     g_cat[slit_num+1, col:col+4] = (
                         values['best'], values['median'],
-                        values['err_lo'], values['err_hi'])
+                        values['err_lo'], values['err_hi']
+                    )
             set_status(row, 'fit_status', 'ok')
             notes = []
             if skyline_status == 'bad':
@@ -224,7 +225,11 @@ def analyze_percentile(samples, config_filename,
         err_lo, median, err_hi = x123[0]-x123[1], x123[1], x123[2]-x123[1]
         status = None
         if config_param_names[j] in ('shared_params-g1', 'shared_params-g2'):
-            is_g_bad = check_g1g2_post(samp_points, pmin=-0.15, pmax=0.15)
+            is_g_bad = check_g1g2_post(
+                samp_points, 
+                pmin=config_par[config_param_names[j]]['prior']['min'], 
+                pmax=config_par[config_param_names[j]]['prior']['max']
+            )
             status = 'bad' if is_g_bad else 'ok'
             if is_g_bad:
                 print(f'Bad shear detected: {config_param_names[j]}')
