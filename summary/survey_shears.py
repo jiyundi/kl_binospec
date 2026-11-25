@@ -1,23 +1,27 @@
-# import os
-# os.chdir('../')
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from astropy.cosmology import FlatLambdaCDM
 from pathlib import Path
+import yaml
 from scipy.integrate import cumulative_trapezoid
 from scipy.stats import gaussian_kde
 
 from data_prep.image.read_and_cutout import read_subaru_img_wcs, cutoutimg
 
 from klm.safe_plot import setup; setup() # must before plt
+plt.style.use('default')
+plt.rcParams.update({
+    "font.family": "sans-serif",
+    "font.sans-serif": "Helvetica",
+    "font.serif": "Helvetica",
+})
 
 COSMO = FlatLambdaCDM(H0=70, Om0=0.3)
 
 
-def lensing_efficiency(z_lens, z_source):
+def lens_depth(z_lens, z_source):
     """D_A(lens, source) / D_A(observer, source) in a flat cosmology."""
     if not np.isfinite(z_source) or z_source <= z_lens:
         raise ValueError(f'Source redshift {z_source} must exceed lens redshift {z_lens}')
@@ -44,36 +48,42 @@ def read_shear_posterior(path):
     return weights[valid], g1[valid], g2[valid]
 
 
-def transformed_shear(weights, g1, g2, theta, factor):
+def transformed_shear(weights, g1, g2, theta):
     cos2, sin2 = np.cos(2 * theta), np.sin(2 * theta)
-    return weights, -factor * (g1 * cos2 + g2 * sin2), factor * (g1 * sin2 - g2 * cos2)
+    return weights, - (g1 * cos2 + g2 * sin2), (g1 * sin2 - g2 * cos2)
 
 
-def geometric_mean_posterior_quantiles(samples_and_weights):
-    """Quantiles of the normalized geometric mean of slit posteriors."""
-    values = np.concatenate([values for values, _ in samples_and_weights])
-    low, high = np.min(values), np.max(values)
+def geometric_mean_posterior_quantiles(samples_and_weights, prior_bounds):
+    """
+    Quantiles of the normalized geometric mean of slit posteriors.
+    """
+    # The product is supported only where all slit priors overlap.
+    low = max(bounds[0] for bounds in prior_bounds)
+    high = min(bounds[1] for bounds in prior_bounds)
     if not high > low:
-        raise ValueError('Posterior samples have no finite range')
-    padding = 0.05 * (high - low)
-    grid = np.linspace(low - padding, high + padding, 1001)
+        raise ValueError('Transformed slit priors have no common range')
+    grid = np.linspace(low, high, 1001)
+    
+    # Each weighted KDE estimates one slit's marginalized 
+    # posterior density. Adding log densities is 
+    # equivalent to multiplying those densities.
     log_density = np.zeros_like(grid)
     for slit_values, weights in samples_and_weights:
         log_density += gaussian_kde(slit_values, weights=weights).logpdf(grid)
+    
+    # Divide the log product by the number of slits: 
+    # the geometric mean.
     log_density /= len(samples_and_weights)
+    
+    # Subtracting the peak avoids overflow; 
+    # CDF normalization removes this scale.
     density = np.exp(log_density - np.max(log_density))
     cdf = cumulative_trapezoid(density, grid, initial=0)
     if not np.isfinite(cdf[-1]) or cdf[-1] <= 0:
         raise ValueError('Combined posterior cannot be normalized')
+    
+    # Read the 16th, 50th, and 84th percentiles
     return np.interp([0.158655, 0.5, 0.841345], cdf / cdf[-1], grid)
-
-
-plt.style.use('default')
-plt.rcParams.update({
-    "font.family": "sans-serif",
-    "font.sans-serif": "Helvetica",
-    "font.serif": "Helvetica",
-})
 
 
 def shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcs=None, 
@@ -81,6 +91,8 @@ def shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcs=None,
                plot_gt=False, plot_gx=False, savefig=True, posterior_by_slit=None):
     
     assert (plot_gt or plot_gx)
+    if posterior_by_slit is None:
+        raise ValueError('posterior_by_slit is required for shear_plot')
     
     common_kwargs = dict(
         arr_shears=arr_shears, 
@@ -180,7 +192,6 @@ def _draw_shear_column(fig, gs, col, kind,
     
     # Umetsu+14 CLASH (A383) WL profile - degitized
     U14_N_bkg_total = 7602 # (A383)
-    U14_beta_avg = 0.79 # (A383)
     n_bins = 10
     R_min  =  0.9
     R_max  = 16.0
@@ -223,7 +234,7 @@ def _draw_shear_column(fig, gs, col, kind,
                      markerfacecolor=(0.5, 3/8, 3/8), 
                      markeredgecolor=(0.5, 3/8, 3/8), 
                      color=(0.5, 3/8, 3/8), lw=1, linestyle=':', 
-                     label=r'$g_+$: Umetsu+14 (A383, $\langle \beta \rangle =$'+f'{U14_beta_avg}'+')', 
+                     label=r'$g_+$: Umetsu+14 (A383, $\langle \beta \rangle =$'+f'{U14_BETA_AVG}'+')', 
                      zorder=1.5)
         ax3.errorbar(U14_Rs, U14_gts, 
                      yerr=[U14_gts_hi - U14_gts, 
@@ -235,7 +246,7 @@ def _draw_shear_column(fig, gs, col, kind,
                      markerfacecolor=(0.5, 3/8, 3/8), 
                      markeredgecolor=(0.5, 3/8, 3/8), 
                      color=(0.5, 3/8, 3/8), lw=1, linestyle=':', 
-                     label=r'$g_+$: Umetsu+14 (A383, $\langle \beta \rangle =$'+f'{U14_beta_avg}'+')', 
+                     label=r'$g_+$: Umetsu+14 (A383, $\langle \beta \rangle =$'+f'{U14_BETA_AVG}'+')', 
                      zorder=1.5)
         for U14_R, U14_gt_lo, U14_N_bkg in \
             zip(U14_Rs, U14_gts_lo, U14_N_bkg_each_bin):
@@ -250,46 +261,48 @@ def _draw_shear_column(fig, gs, col, kind,
                     zorder=0.5)
     
     # Pranjal+24 results (A2261) -- only overplotted on the tangential (gt) panel
-    if (kind == 'gt') or (share_axs is not None):
-        P24_names  = ['b007', 'b008', 'c007']
-        P24_zs     = np.array([ 0.623,  0.585,  0.594])
-        P24_Rs     = np.array([ 1.60 ,  5.05 ,  0.55 ])
-        P24_gts    = np.array([ 0.208,  0.041,  0.144])
-        P24_gterrs = np.array([ 0.020,  0.038,  0.030])
-        U14_beta_2261 = U14_beta_avg # 0.70
+    # if (kind == 'gt') or (share_axs is not None):
+    #     P24_names  = ['b007', 'b008', 'c007']
+    #     P24_zs     = np.array([ 0.623,  0.585,  0.594])
+    #     P24_Rs     = np.array([ 1.60 ,  5.05 ,  0.55 ])
+    #     P24_gts    = np.array([ 0.208,  0.041,  0.144])
+    #     P24_gterrs = np.array([ 0.020,  0.038,  0.030])
+    #     U14_beta_2261 = U14_BETA_AVG
         
-        # Calibrate gt and gx
-        P24_facs = np.array([])
-        for i in range(len(P24_gts)):
-            beta = lensing_efficiency(0.224, P24_zs[i])
-            fac  = U14_beta_2261 / beta
-            P24_facs = np.append(P24_facs, fac)
+    #     # Calibrate gt and gx
+    #     P24_facs = np.array([])
+    #     for i in range(len(P24_gts)):
+    #         beta = lens_depth(0.224, P24_zs[i])
+    #         fac  = U14_beta_2261 / beta
+    #         P24_facs = np.append(P24_facs, fac)
         
-        for N_, R_, Gt_, Gte_, Fac_ \
-            in zip(P24_names, P24_Rs, P24_gts, P24_gterrs, P24_facs):
-            ax2.text(R_, (Gt_ + Gte_) * Fac_ + 0.01, N_, 
-                     color='magenta', fontsize=8, zorder=4, ha='center')
-            if share_axs is None:
-                ax2.errorbar( R_, Gt_ * Fac_, yerr=Gte_ * Fac_, 
-                             capsize=4, marker='^', markersize=1, 
-                             color='magenta', zorder=0.75)
-                ax3.errorbar( R_, Gt_ * Fac_, yerr=Gte_ * Fac_, 
-                             capsize=4, marker='^', markersize=1, 
-                             color='magenta', zorder=0.75)
+    #     for N_, R_, Gt_, Gte_, Fac_ \
+    #         in zip(P24_names, P24_Rs, P24_gts, P24_gterrs, P24_facs):
+    #         ax2.text(R_, (Gt_ + Gte_) * Fac_ + 0.01, N_, 
+    #                  color='magenta', fontsize=8, zorder=4, ha='center')
+    #         if share_axs is None:
+    #             ax2.errorbar( R_, Gt_ * Fac_, yerr=Gte_ * Fac_, 
+    #                          capsize=4, marker='^', markersize=1, 
+    #                          color='magenta', zorder=0.75)
+    #             ax3.errorbar( R_, Gt_ * Fac_, yerr=Gte_ * Fac_, 
+    #                          capsize=4, marker='^', markersize=1, 
+    #                          color='magenta', zorder=0.75)
                 
-        if share_axs is None:
-            ax2.scatter(P24_Rs, P24_gts * P24_facs, 
-                        marker='^', s=20, color='magenta', 
-                        label=r'$g_+$: Pranjal+24 (A2261, rescaled to $\beta =$'+f'{U14_beta_avg}'+')', 
-                        zorder=0.75)
-            ax3.scatter(P24_Rs, P24_gts * P24_facs, 
-                        marker='^', s=20, color='magenta', 
-                        label=r'$g_+$: Pranjal+24 (A2261, $\rightarrow \beta =$'+f'{U14_beta_avg}'+')', 
-                        zorder=0.75)
+    #     if share_axs is None:
+    #         ax2.scatter(P24_Rs, P24_gts * P24_facs, 
+    #                     marker='^', s=20, color='magenta', 
+    #                     label=r'$g_+$: Pranjal+24 (A2261, rescaled to $\beta =$'+f'{U14_BETA_AVG}'+')', 
+    #                     zorder=0.75)
+    #         ax3.scatter(P24_Rs, P24_gts * P24_facs, 
+    #                     marker='^', s=20, color='magenta', 
+    #                     label=r'$g_+$: Pranjal+24 (A2261, $\rightarrow \beta =$'+f'{U14_BETA_AVG}'+')', 
+    #                     zorder=0.75)
         
-    # In this work...
-    Rs, betas, facs, gts, gt_errs, gxs, gx_errs = [], [], [], [], [], [], []
-    transformed_posteriors = []
+    # Each slit already has calibrated gt/gx samples and summary statistics.
+    Rs, facs, gts, gt_errs, gxs, gx_errs = [], [], [], [], [], []
+    slit_posteriors = []
+
+    # Transform for each slit
     for i in range(1, len(arr_shears)):
         slitID, z, RA, DEC, R, theta_rad, \
             g1, g1_err, g2, g2_err, \
@@ -310,48 +323,45 @@ def _draw_shear_column(fig, gs, col, kind,
                      color='darkcyan', ls=':', alpha=0.23, 
                      transform=ax1.get_transform('world'), zorder=3)
         
-            if kind == 'gt':
-                if gt >= 0: 
-                    add_an_arrow(ax1, RA, DEC,  gt*10000, theta_rad+np.pi*1/2, color='firebrick', lw=2, zorder=4)
-                    add_an_arrow(ax1, RA, DEC,  gt*10000, theta_rad+np.pi*3/2, color='firebrick', lw=2, zorder=4, text=rf'${gt:.2f}$')
-                else:
-                    add_an_arrow(ax1, RA, DEC, -gt*10000, theta_rad      , color='firebrick', lw=2, zorder=4, text=rf'${gt:.2f}$')
-                    add_an_arrow(ax1, RA, DEC, -gt*10000, theta_rad+np.pi, color='firebrick', lw=2, zorder=4)
-            else: # kind == 'gx'
-                if gx >= 0: 
-                    add_an_arrow(ax1, RA, DEC,  gx*10000, theta_rad+np.pi*1/4, color='mediumblue', lw=2, zorder=4)
-                    add_an_arrow(ax1, RA, DEC,  gx*10000, theta_rad+np.pi*5/4, color='mediumblue', lw=2, zorder=4, text=rf'${gx:.2f}$')
-                else:
-                    add_an_arrow(ax1, RA, DEC, -gx*10000, theta_rad+np.pi*3/4, color='mediumblue', lw=2, zorder=4, text=rf'${gx:.2f}$')
-                    add_an_arrow(ax1, RA, DEC, -gx*10000, theta_rad+np.pi*7/4, color='mediumblue', lw=2, zorder=4)
+            # if kind == 'gt':
+            #     if gt >= 0: 
+            #         add_an_arrow(ax1, RA, DEC,  gt*10000, theta_rad+np.pi*1/2, color='firebrick', lw=2, zorder=4)
+            #         add_an_arrow(ax1, RA, DEC,  gt*10000, theta_rad+np.pi*3/2, color='firebrick', lw=2, zorder=4, text=rf'${gt:.2f}$')
+            #     else:
+            #         add_an_arrow(ax1, RA, DEC, -gt*10000, theta_rad      , color='firebrick', lw=2, zorder=4, text=rf'${gt:.2f}$')
+            #         add_an_arrow(ax1, RA, DEC, -gt*10000, theta_rad+np.pi, color='firebrick', lw=2, zorder=4)
+            # else: # kind == 'gx'
+            #     if gx >= 0: 
+            #         add_an_arrow(ax1, RA, DEC,  gx*10000, theta_rad+np.pi*1/4, color='mediumblue', lw=2, zorder=4)
+            #         add_an_arrow(ax1, RA, DEC,  gx*10000, theta_rad+np.pi*5/4, color='mediumblue', lw=2, zorder=4, text=rf'${gx:.2f}$')
+            #     else:
+            #         add_an_arrow(ax1, RA, DEC, -gx*10000, theta_rad+np.pi*3/4, color='mediumblue', lw=2, zorder=4, text=rf'${gx:.2f}$')
+            #         add_an_arrow(ax1, RA, DEC, -gx*10000, theta_rad+np.pi*7/4, color='mediumblue', lw=2, zorder=4)
         
-            if g1 >= 0: 
-                add_an_arrow(ax1, RA, DEC,  g1*10000,         0, color='thistle', lw=1)
-                add_an_arrow(ax1, RA, DEC,  g1*10000, np.pi*  1, color='thistle', lw=1, text=rf'${g1:.2f}$')
-            else:
-                add_an_arrow(ax1, RA, DEC, -g1*10000, np.pi*1/2, color='thistle', lw=1, text=rf'${g1:.2f}$')
-                add_an_arrow(ax1, RA, DEC, -g1*10000, np.pi*3/2, color='thistle', lw=1)
-            if g2 >= 0: 
-                add_an_arrow(ax1, RA, DEC,  g2*10000, np.pi*1/4, color='paleturquoise', lw=1, text=rf'${g2:.2f}$')
-                add_an_arrow(ax1, RA, DEC,  g2*10000, np.pi*5/4, color='paleturquoise', lw=1)
-            else:
-                add_an_arrow(ax1, RA, DEC, -g2*10000, np.pi*3/4, color='paleturquoise', lw=1, text=rf'${g2:.2f}$')
-                add_an_arrow(ax1, RA, DEC, -g2*10000, np.pi*7/4, color='paleturquoise', lw=1)
+            # if g1 >= 0: 
+            #     add_an_arrow(ax1, RA, DEC,  g1*10000,         0, color='thistle', lw=1)
+            #     add_an_arrow(ax1, RA, DEC,  g1*10000, np.pi*  1, color='thistle', lw=1, text=rf'${g1:.2f}$')
+            # else:
+            #     add_an_arrow(ax1, RA, DEC, -g1*10000, np.pi*1/2, color='thistle', lw=1, text=rf'${g1:.2f}$')
+            #     add_an_arrow(ax1, RA, DEC, -g1*10000, np.pi*3/2, color='thistle', lw=1)
+            # if g2 >= 0: 
+            #     add_an_arrow(ax1, RA, DEC,  g2*10000, np.pi*1/4, color='paleturquoise', lw=1, text=rf'${g2:.2f}$')
+            #     add_an_arrow(ax1, RA, DEC,  g2*10000, np.pi*5/4, color='paleturquoise', lw=1)
+            # else:
+            #     add_an_arrow(ax1, RA, DEC, -g2*10000, np.pi*3/4, color='paleturquoise', lw=1, text=rf'${g2:.2f}$')
+            #     add_an_arrow(ax1, RA, DEC, -g2*10000, np.pi*7/4, color='paleturquoise', lw=1)
         
-        # Calibrate gt and gx
-        beta = lensing_efficiency(0.1883, z)
-        fac  = U14_beta_avg / beta
+        # The calibration was applied to the samples before plotting.
+        beta = lens_depth(0.1883, z)
+        fac  = U14_BETA_AVG / beta
         
-        Rs.append(R); betas.append(beta); facs.append(fac)
-        gts.append(gt * fac); gt_errs.append(gt_err * fac)
-        gxs.append(gx * fac); gx_errs.append(gx_err * fac)
-        if posterior_by_slit is not None:
-            weights, g1_samples, g2_samples = posterior_by_slit[int(slitID)]
-            transformed_posteriors.append(
-                transformed_shear(weights, g1_samples, g2_samples, theta_rad, fac))
+        Rs.append(R); facs.append(fac)
+        gts.append(gt); gt_errs.append(gt_err)
+        gxs.append(gx); gx_errs.append(gx_err)
+        slit_posteriors.append(posterior_by_slit[int(slitID)])
         
         # add texts
-        y_val = gt * fac if kind == 'gt' else gx * fac
+        y_val = gt if kind == 'gt' else gx
         
         ax2.text(R+1/8, y_val, int(slitID), 
                  color='black', fontsize=8, va='center', zorder=5)
@@ -375,7 +385,7 @@ def _draw_shear_column(fig, gs, col, kind,
     ax2.scatter(Rs, y_vals_all, 
                 marker=marker, s=16, 
                 facecolors='white', edgecolors=main_color, zorder=2, 
-                label=ylabel_full+r': Binospec (A383, $\beta =$'+f'{U14_beta_avg}'+')')
+                label=ylabel_full+r': Binospec (A383, $\beta =$'+f'{U14_BETA_AVG}'+')')
     
     # Error information
     if share_axs is not None:
@@ -407,8 +417,7 @@ def _draw_shear_column(fig, gs, col, kind,
     # count gt/gx in bins
     for i, (r, gt, gt_err, gx, gx_err) in enumerate(zip(Rs, gts, gt_errs, gxs, gx_errs)):
         r_low = int(r // binsize) * binsize
-        posterior = transformed_posteriors[i] if posterior_by_slit is not None else None
-        groups[f'{r_low}'].append((gt, gt_err, gx, gx_err, posterior))
+        groups[f'{r_low}'].append((gt, gt_err, gx, gx_err, slit_posteriors[i]))
     
     # calculate binned average
     binned_R_lows, binned_Nslits, binned_yvals, binned_yerrs = [], [], [], []
@@ -422,21 +431,15 @@ def _draw_shear_column(fig, gs, col, kind,
         gterrs = np.array([v[1] for v in vals_and_errs])
         gxs    = np.array([v[2] for v in vals_and_errs])
         gxerrs = np.array([v[3] for v in vals_and_errs])
-        if posterior_by_slit is None:
-            gt_weights = 1 / gterrs**2
-            gx_weights = 1 / gxerrs**2
-            gt_avg = np.average(gts, weights=gt_weights)
-            gx_avg = np.average(gxs, weights=gx_weights)
-            gterr_avg = np.sum(gt_weights)**(-0.5)
-            gxerr_avg = np.sum(gx_weights)**(-0.5)
-            gt_q = [gt_avg - gterr_avg, gt_avg, gt_avg + gterr_avg]
-            gx_q = [gx_avg - gxerr_avg, gx_avg, gx_avg + gxerr_avg]
-        else:
-            gt_q = geometric_mean_posterior_quantiles([(v[4][1], v[4][0]) for v in vals_and_errs])
-            gx_q = geometric_mean_posterior_quantiles([(v[4][2], v[4][0]) for v in vals_and_errs])
-            gt_avg, gx_avg = gt_q[1], gx_q[1]
-            gterr_avg = 0.5 * (gt_q[2] - gt_q[0])
-            gxerr_avg = 0.5 * (gx_q[2] - gx_q[0])
+        gt_q = geometric_mean_posterior_quantiles(
+            [(v[4][1], v[4][0]) for v in vals_and_errs],
+            [v[4][3] for v in vals_and_errs])
+        gx_q = geometric_mean_posterior_quantiles(
+            [(v[4][2], v[4][0]) for v in vals_and_errs],
+            [v[4][4] for v in vals_and_errs])
+        gt_avg, gx_avg = gt_q[1], gx_q[1]
+        gterr_avg = 0.5 * (gt_q[2] - gt_q[0])
+        gxerr_avg = 0.5 * (gx_q[2] - gx_q[0])
         val_avg, err_avg = (gt_avg, gterr_avg) if kind == 'gt' else (gx_avg, gxerr_avg)
         q = gt_q if kind == 'gt' else gx_q
         
@@ -453,7 +456,7 @@ def _draw_shear_column(fig, gs, col, kind,
             'gx_median': gx_q[1], 'gx_err_minus': gx_q[1] - gx_q[0],
             'gx_err_plus': gx_q[2] - gx_q[1],
         })
-    if posterior_by_slit is not None and (kind == 'gt' or share_axs is None):
+    if kind == 'gt' or share_axs is None:
         pd.DataFrame(binned_rows).to_csv(
             Path(__file__).resolve().parent / 'binned_shears.csv', index=False)
     
@@ -473,7 +476,7 @@ def _draw_shear_column(fig, gs, col, kind,
                 np.array(binned_yvals), 
                 marker=marker, s=16, 
                 facecolors='white', edgecolors=main_color, zorder=2, 
-                label=ylabel_full+r': Binospec (A383, $\rightarrow \beta =$'+f'{U14_beta_avg}'+f'), bin size = {binsize}\'')
+                label=ylabel_full+r': Binospec (A383, $\rightarrow \beta =$'+f'{U14_BETA_AVG}'+f'), bin size = {binsize}\'')
     
     for i in range(len(binned_R_lows)):
         if share_axs is None:
@@ -561,7 +564,7 @@ def _draw_shear_column(fig, gs, col, kind,
     if kind == 'gx':
         ax2.axhline(y=0, linestyle='-', lw=1, color='gray', zorder=0)
     ax2.set_xlabel(r'$R$'+' (arcmin)', fontsize=15)
-    ax2.set_ylabel(r'Reduced shear', fontsize=15)
+    ax2.set_ylabel(r'Reduced shear at $\beta =$'+f'{U14_BETA_AVG}', fontsize=15)
     ax2.minorticks_on()
     ax2.legend(prop={'size': 7})
     ax2.grid(linestyle='-', axis='y', color='gray', alpha=0.25, zorder=0)
@@ -571,7 +574,7 @@ def _draw_shear_column(fig, gs, col, kind,
     if kind == 'gx':
         ax3.axhline(y=0, linestyle='-', lw=1, color='gray', zorder=0)
     ax3.set_xlabel(r'$R$'+' (arcmin)', fontsize=15)
-    ax3.set_ylabel(r'Binned reduced shear', fontsize=15)
+    ax3.set_ylabel(r'Binned reduced shear at $\beta =$'+f'{U14_BETA_AVG}', fontsize=15)
     ax3.minorticks_on()
     ax3.legend(prop={'size': 6})
     ax3.grid(linestyle='-', axis='y', color='gray', alpha=0.25, zorder=0)
@@ -638,20 +641,45 @@ def scale_calc(z, H0, Omega_M):
     return d_A
 
 
-def proper_a_d_distance_calc(z, H0, Omega_M):
-    from astropy.cosmology import FlatLambdaCDM
-    cosmo = FlatLambdaCDM(H0=H0, Om0=Omega_M)
-    d_A = cosmo.angular_diameter_distance(z) # Mpc
-    return d_A.value
+# def proper_a_d_distance_calc(z, H0, Omega_M):
+#     from astropy.cosmology import FlatLambdaCDM
+#     cosmo = FlatLambdaCDM(H0=H0, Om0=Omega_M)
+#     d_A = cosmo.angular_diameter_distance(z) # Mpc
+#     return d_A.value
+
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
-    # img_dir  = '../../RSCH3/HSC_img_A383/'
-    # sci_fn_G = 'hlsp_clash_subaru_suprimecam_a383_ip_2005-v20110422_drz.fits'
+    U14_BETA_AVG = 0.79
+    config_path = Path(__file__).resolve().parent.parent / 'config' / 'binospec_fitting_params.yaml'
+    with open(config_path, encoding='utf-8') as config_file:
+        shared_priors = yaml.safe_load(config_file)['shared_params']
+    g1_prior = shared_priors['g1']['prior']
+    g2_prior = shared_priors['g2']['prior']
+    prior_corners = np.array([
+        (g1, g2)
+        for g1 in (g1_prior['min'], g1_prior['max'])
+        for g2 in (g2_prior['min'], g2_prior['max'])
+    ])
+
+    # slits_to_delete = [ 57, 135,  42,  58, 141,  49,  79]
+    shear_table_filename = Path(__file__).resolve().parent / 'shear_table_20261120.xlsx'
     spec1d2dfolder02 = '../../RSCH3/UAO-S156-23B-A383/psf/231019/1d2dspecfiles/'
     
+    # img_dir  = '../../RSCH3/HSC_img_A383/'
+    # sci_fn_G = 'hlsp_clash_subaru_suprimecam_a383_ip_2005-v20110422_drz.fits'
+
     # Read shear catalog
-    df     = pd.read_excel("shear_table_20261120.xlsx", header=None, engine='openpyxl')
+    df     = pd.read_excel(shear_table_filename, header=None, engine='openpyxl')
     array  = df.to_numpy()
     
     headers = {name: i for i, name in enumerate(array[1]) if isinstance(name, str)}
@@ -671,32 +699,38 @@ if __name__ == '__main__':
         mask_good_g2 = ~np.isnan(g2err1) & (g2err1 < 0) & (g2err2 > 0) & (np.abs(g2err1) <= 1e3)
         mask_good_g1g2 = mask_good_g1 & mask_good_g2
     
-    # slits_to_delete = [ 57, 135,  42,  58, 141,  49,  79]
     # mask_deleted = [(num not in slits_to_delete) for num in array[2:, 0].astype(int)]
     
     g_cat_good_g1g2 = array[np.r_[True, True,  mask_good_g1g2]]
     
     cluster_centerRA  =  ( ( 2)+(48)/60+( 3.3)/3600 )*15
     cluster_centerDEC = -( ( 3)+(31)/60+(46.4)/3600 )
-    
-    columns    = ['slitID', 'z', 'RA', 'DEC', 'radius', 'theta_rad', 
-                  'g1_median', 'g1_err', 'g2_median', 'g2_err', 
-                  'gt',      'gt_err', 'gx',      'gx_err']
+
+    # Create a table to store:
+    columns  = ['slitID', 'z', 'RA', 'DEC', 'radius', 'theta_rad', 
+                'g1_median', 'g1_err', 'g2_median', 'g2_err', 
+                'gt',        'gt_err', 'gx',        'gx_err']
     arr_shears = np.zeros((1, len(columns))).astype(str)
     arr_shears[0] = np.array(columns)
+
+    # Store calibrated (weights, gt_samples, gx_samples) by slit ID.
     posterior_by_slit = {}
+    excel_results = {}
     
-    for i in range(len(g_cat_good_g1g2[2:, 0])):
+    for i, source_index in enumerate(np.flatnonzero(mask_good_g1g2)):
         # Calculate galaxy's position angle w.r.t. CLUSTER CENTER
         slit_id = g_cat_good_g1g2[2+i,  0]
         z       = np.nanmean(g_cat_good_g1g2[2+i, [5, 8, 11]])
         RA, DEC = g_cat_good_g1g2[2+i, 15], g_cat_good_g1g2[2+i, 16]
+
+        # Guess your location of the posterior.
         post_path = (Path(__file__).resolve().parent.parent / 'scripts' /
                      f'Slit_{int(slit_id):03d}' / 'post.txt')
         weights, g1_samples, g2_samples = read_shear_posterior(post_path)
-        posterior_by_slit[int(slit_id)] = (weights, g1_samples, g2_samples)
         g1_q = weighted_quantiles(g1_samples, weights)
         g2_q = weighted_quantiles(g2_samples, weights)
+
+        # Calculate median and error for g1 and g2
         g1, g2 = g1_q[1], g2_q[1]
         g1_err = 0.5 * (g1_q[2] - g1_q[0])
         g2_err = 0.5 * (g2_q[2] - g2_q[0])
@@ -707,31 +741,71 @@ if __name__ == '__main__':
         theta_cl_rad = np.arctan2(DEC - cluster_centerDEC, 
                                   RA  - cluster_centerRA)
         
-        _, gt_samples, gx_samples = transformed_shear(
-            weights, g1_samples, g2_samples, theta_cl_rad, 1.0)
+        beta = lens_depth(0.1883, z)
+        fac = U14_BETA_AVG / beta
+        _, gt_raw_samples, gx_raw_samples = transformed_shear(
+            weights, g1_samples, g2_samples, theta_cl_rad
+        )
+        gt_raw_q = weighted_quantiles(gt_raw_samples, weights)
+        gx_raw_q = weighted_quantiles(gx_raw_samples, weights)
+        gt_samples, gx_samples = gt_raw_samples * fac, gx_raw_samples * fac
+        _, gt_corners, gx_corners = transformed_shear(
+            None, prior_corners[:, 0], prior_corners[:, 1], theta_cl_rad)
+        gt_corners, gx_corners = gt_corners * fac, gx_corners * fac
+        gt_bounds = (gt_corners.min(), gt_corners.max())
+        gx_bounds = (gx_corners.min(), gx_corners.max())
+        posterior_by_slit[int(slit_id)] = (
+            weights, gt_samples, gx_samples, gt_bounds, gx_bounds)
         gt_q = weighted_quantiles(gt_samples, weights)
         gx_q = weighted_quantiles(gx_samples, weights)
+
+        # Calculate median and error for gt and gx
         gt, gx = gt_q[1], gx_q[1]
         gt_err = 0.5 * (gt_q[2] - gt_q[0])
         gx_err = 0.5 * (gx_q[2] - gx_q[0])
+        excel_results[int(source_index) + 3] = (
+            g1, g1_err, g2, g2_err,
+            gt_raw_q[1], 0.5 * (gt_raw_q[2] - gt_raw_q[0]),
+            gx_raw_q[1], 0.5 * (gx_raw_q[2] - gx_raw_q[0]),
+            beta, fac, gt, gt_err, gx, gx_err,
+        )
         
         arr_shears = np.append(arr_shears, 
                                [[slit_id, z, RA, DEC, R, theta_cl_rad, 
                                  g1, g1_err, g2, g2_err, 
                                  gt, gt_err, gx, gx_err]],
                                axis=0)
-    
+
     # Save shear catalog
-    import pandas as pd
-    headers = arr_shears[0] 
-    data    = arr_shears[1:]
-    df = pd.DataFrame(data, columns=headers)
-    df = df.apply(pd.to_numeric)
-    df.iloc[:, 1]   = df.iloc[:, 1].round(5) # 5 digits
-    df.iloc[:, 2:6] = df.iloc[:, 2:6].round(7) # 7 digits
-    df.iloc[:, 6:]  = df.iloc[:, 6:].round(5) # 7 digits
-    with open('arr_shears.txt', 'w') as f:
-        f.write(df.to_string(index=False))
+    # Append results to a copy of the source workbook, keeping its other sheets and charts.
+    from openpyxl import load_workbook
+    workbook = load_workbook(shear_table_filename)
+    sheet = workbook.active
+    new_columns = (
+        'g1_posterior', 'g1_posterior_err', 'g2_posterior', 'g2_posterior_err',
+        'gt_raw', 'gt_raw_err', 'gx_raw', 'gx_raw_err',
+        'beta', 'fac', 'gt_calibrated', 'gt_calibrated_err',
+        'gx_calibrated', 'gx_calibrated_err',
+    )
+    first_new_column = sheet.max_column + 1
+    for column, name in enumerate(new_columns, first_new_column):
+        sheet.cell(row=2, column=column, value=name)
+    for row_number, values in excel_results.items():
+        for column, value in enumerate(values, first_new_column):
+            sheet.cell(row=row_number, column=column, value=float(value))
+    output_path = shear_table_filename.with_name(shear_table_filename.stem + '_final_shears.xlsx')
+    workbook.save(output_path)
+    
+    # import pandas as pd
+    # headers = arr_shears[0] 
+    # data    = arr_shears[1:]
+    # df = pd.DataFrame(data, columns=headers)
+    # df = df.apply(pd.to_numeric)
+    # df.iloc[:, 1]   = df.iloc[:, 1].round(5) # 5 digits
+    # df.iloc[:, 2:6] = df.iloc[:, 2:6].round(7) # 7 digits
+    # df.iloc[:, 6:]  = df.iloc[:, 6:].round(5) # 7 digits
+    # with open('arr_shears.txt', 'w') as f:
+    #     f.write(df.to_string(index=False))
         
     def sort_arr_by_col(arr, col_idx=0, skip_row0=True):
         # If column titles at the 1st row
@@ -754,12 +828,6 @@ if __name__ == '__main__':
     #     img_width=image_size*60/scale, img_height=image_size*60/scale, 
     #     outputWCS=True)
     wcsGc = None
-    
-    # tan_shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcsGc, 
-    #                image_size*60/scale, maskCenterRA, maskCenterDEC)
-    
-    # cross_shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcsGc, 
-    #                  image_size*60/scale, maskCenterRA, maskCenterDEC)
     
     shear_plot(arr_shears, cluster_centerRA, cluster_centerDEC, wcsGc,
                plot_gt=True, plot_gx=True, posterior_by_slit=posterior_by_slit)
